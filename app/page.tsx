@@ -21,6 +21,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [theme, setTheme] = useState("theme-sun");
   const [locationName, setLocationName] = useState("New York");
+  const [unit, setUnit] = useState<"celsius" | "fahrenheit">("fahrenheit"); // Default to F for US demo
 
   // Load weather on mount (try geolocation, fallback to NYC)
   useEffect(() => {
@@ -28,7 +29,17 @@ export default function Home() {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           // If we had a reverse-geocode we could get the name, but for now just fetch weather
-          setLocationName("Current Location");
+          try {
+            const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`);
+            if (geoRes.ok) {
+              const geoData = await geoRes.json();
+              setLocationName(geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.county || "Current Location");
+            } else {
+              setLocationName("Current Location");
+            }
+          } catch (e) {
+            setLocationName("Current Location");
+          }
           fetchWeatherForLocation(position.coords.latitude, position.coords.longitude);
         },
         (error) => {
@@ -41,9 +52,19 @@ export default function Home() {
     }
   }, []);
 
+  // Re-fetch weather when unit changes, but only if we have coordinates
+  useEffect(() => {
+    if (weather) {
+      // Re-fetch with new unit utilizing current lat/lon from the existing weather object.
+      // Easiest is to save lat/lon to state or pull from weather object if available.
+      // Open-meteo returns lat/lon in the response object!
+      fetchWeatherForLocation(weather.latitude, weather.longitude);
+    }
+  }, [unit]);
+
   const fetchWeatherForLocation = async (lat: number, lon: number) => {
     setLoading(true);
-    const data = await getWeatherData(lat, lon);
+    const data = await getWeatherData(lat, lon, unit);
     if (data) {
       setWeather(data);
       const newTheme = getThemeFromCode(data.current.weather_code, data.current.is_day);
@@ -64,6 +85,7 @@ export default function Home() {
           personality: currentP,
           weather: {
             temp: Math.round(weatherData.current.temperature_2m),
+            unit: unit === "fahrenheit" ? "F" : "C",
             condition: weatherData.current.weather_code, // Ideally mapped to string
             isDay: weatherData.current.is_day === 1
           }
@@ -106,21 +128,30 @@ export default function Home() {
   return (
     <main className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-8 pt-12 transition-colors duration-1000">
 
-      {/* Top Search & Personality Settings */}
+      {/* Top Search, Units & Personality Settings */}
       <div className="w-full max-w-lg flex flex-col gap-4">
 
-        <form onSubmit={handleSearch} className="relative w-full shadow-lg rounded-[24px]">
-          <input
-            type="text"
-            placeholder="Search city... (try 'london')"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white/70 backdrop-blur-md rounded-[24px] py-4 pl-6 pr-12 outline-none border-2 border-transparent focus:border-white transition-all text-gray-800 font-semibold"
-          />
-          <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-800 transition-colors">
-            <Search size={20} />
+        <div className="flex gap-2">
+          <form onSubmit={handleSearch} className="relative flex-1 shadow-lg rounded-[24px]">
+            <input
+              type="text"
+              placeholder="Search city... (try 'london')"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-white/70 backdrop-blur-md rounded-[24px] py-4 pl-6 pr-12 outline-none border-2 border-transparent focus:border-white transition-all text-gray-800 font-semibold"
+            />
+            <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-800 transition-colors">
+              <Search size={20} />
+            </button>
+          </form>
+
+          <button
+            onClick={() => setUnit(unit === "celsius" ? "fahrenheit" : "celsius")}
+            className="bg-white/70 backdrop-blur-md shadow-lg rounded-[24px] px-6 font-bold text-gray-800 hover:bg-white transition-colors flex items-center justify-center min-w-[70px]"
+          >
+            &deg;{unit === "celsius" ? "C" : "F"}
           </button>
-        </form>
+        </div>
 
         <div className="flex bg-white/40 rounded-full p-1 shadow-inner overflow-x-auto hide-scrollbar">
           {PERSONALITIES.map(p => (
