@@ -97,7 +97,7 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
                     }}
                     onFocus={() => setIsOpen(true)}
                     placeholder={placeholder}
-                    className="w-full bg-white/70 backdrop-blur-md rounded-[24px] py-4 pl-12 pr-12 outline-none border-2 border-transparent focus:border-white focus:bg-white/90 transition-all text-gray-800 font-semibold shadow-lg organic-input"
+                    className="w-full bg-white/70 backdrop-blur-md rounded-[24px] h-[64px] pl-14 pr-12 outline-none border-2 border-transparent focus:border-white focus:bg-white/90 transition-all text-gray-800 font-semibold shadow-lg organic-input"
                 />
                 {query && (
                     <button
