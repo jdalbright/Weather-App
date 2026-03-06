@@ -30,7 +30,7 @@ import {
   type MetarData,
   type RainSummary,
 } from "@/lib/weather";
-import { Info, Loader2, Monitor, MoonStar, Settings, SunMedium, X } from "lucide-react";
+import { Info, Loader2, Monitor, MoonStar, RefreshCw, Settings, SunMedium, X } from "lucide-react";
 import {
   DEFAULT_PERSONALITY,
   getAllPersonalities,
@@ -50,6 +50,9 @@ type CompatibleMediaQueryList = MediaQueryList & {
 const APPEARANCE_STORAGE_KEY = "weather-appearance";
 const CUSTOM_PERSONALITIES_STORAGE_KEY = "weather-custom-personalities";
 const DISMISSED_ALERTS_STORAGE_KEY = "weather-dismissed-alerts";
+
+const PULL_THRESHOLD = 72;
+const MAX_PULL = PULL_THRESHOLD + 24;
 
 type AdviceExtras = {
   aqi?: number;
@@ -217,6 +220,10 @@ export default function Home() {
     tempUnit: "fahrenheit",
     distUnit: "mph",
   });
+
+  // Pull-to-refresh state
+  const [pullDistance, setPullDistance] = useState(0);
+  const pullTouchStartRef = useRef<number | null>(null);
 
   // Hydrate from localStorage after mount to avoid SSR mismatch
   useEffect(() => {
@@ -487,6 +494,40 @@ export default function Home() {
     setLoading(false);
   }, [fetchAIAdvice, settings.distUnit, settings.tempUnit]);
 
+  // Pull-to-refresh touch handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (window.scrollY === 0 && !loading) {
+      pullTouchStartRef.current = e.touches[0].clientY;
+    }
+  }, [loading]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (pullTouchStartRef.current === null) return;
+    if (window.scrollY > 0) {
+      pullTouchStartRef.current = null;
+      setPullDistance(0);
+      return;
+    }
+    const delta = e.touches[0].clientY - pullTouchStartRef.current;
+    if (delta <= 0) {
+      pullTouchStartRef.current = null;
+      setPullDistance(0);
+      return;
+    }
+    const distance = Math.min(delta * 0.45, MAX_PULL);
+    setPullDistance(distance);
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (pullTouchStartRef.current === null) return;
+    pullTouchStartRef.current = null;
+    const shouldRefresh = pullDistance >= PULL_THRESHOLD && coords && !loading;
+    setPullDistance(0);
+    if (shouldRefresh) {
+      void fetchWeatherForLocation(coords.lat, coords.lon, coords.countryCode);
+    }
+  }, [pullDistance, coords, loading, fetchWeatherForLocation]);
+
   const initialFetchRef = useRef(false);
 
   // Load weather on mount (try geolocation, fallback to NYC)
@@ -733,8 +774,32 @@ export default function Home() {
     scrollSettingsIntoView();
   }, [scrollSettingsIntoView]);
 
+  const pullRatio = Math.min(pullDistance / PULL_THRESHOLD, 1);
+
   return (
-    <main className="mx-auto flex w-full min-h-screen max-w-7xl flex-col gap-8 px-4 pt-8 pb-8 text-[var(--text-primary)] md:px-8">
+    <main
+      className="mx-auto flex w-full min-h-screen max-w-7xl flex-col gap-8 px-4 pt-8 pb-8 text-[var(--text-primary)] md:px-8"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+
+      {/* Pull-to-refresh indicator */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed left-1/2 z-50 flex h-10 w-10 items-center justify-center rounded-full surface-card-strong shadow-md transition-[opacity,transform] duration-150"
+        style={{
+          top: -40,
+          opacity: pullDistance > 0 ? pullRatio : 0,
+          transform: `translateX(-50%) translateY(${pullDistance > 0 ? pullDistance : 0}px)`,
+        }}
+      >
+        <RefreshCw
+          size={18}
+          className={pullDistance >= PULL_THRESHOLD ? "text-[var(--accent-text)]" : "text-[var(--text-muted)]"}
+          style={{ transform: `rotate(${pullRatio * 360}deg)` }}
+        />
+      </div>
 
       {/* Top Search, Units & Personality Settings */}
       <div ref={settingsAnchorRef} className="mx-auto flex w-full sm:max-w-7xl flex-col gap-8">
