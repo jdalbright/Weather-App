@@ -6,7 +6,6 @@ import {
     CloudSun,
     CloudMoon,
     CloudRain,
-    CloudDrizzle,
     CloudLightning,
     CloudSnow,
     CloudFog,

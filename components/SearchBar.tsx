@@ -5,7 +5,7 @@ import { Search, X, Clock, MapPin } from "lucide-react";
 import { geocodeLocation, GeocodeResult } from "@/lib/weather";
 
 interface SearchBarProps {
-    onLocationSelect: (lat: number, lon: number, name: string) => void;
+    onLocationSelect: (lat: number, lon: number, name: string, countryCode?: string | null) => void;
     placeholder?: string;
 }
 
@@ -69,7 +69,7 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
     };
 
     const handleSelect = (location: GeocodeResult) => {
-        onLocationSelect(location.lat, location.lon, location.name);
+        onLocationSelect(location.lat, location.lon, location.name, location.countryCode);
         addToRecentSearches(location);
         setQuery("");
         setSuggestions([]);
@@ -84,7 +84,7 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
     return (
         <div className="relative w-full" ref={containerRef}>
             <div className="relative flex items-center group">
-                <div className="absolute left-4 text-gray-400 group-focus-within:text-gray-600 transition-colors">
+                <div className="theme-subtle absolute left-4 transition-colors group-focus-within:text-[var(--text-primary)]">
                     <Search size={20} />
                 </div>
                 <input
@@ -100,15 +100,16 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
                     }}
                     onFocus={() => setIsOpen(true)}
                     placeholder={placeholder}
-                    className={`w-full h-14 backdrop-blur-md pl-12 pr-12 outline-none border-2 transition-all text-gray-800 font-semibold shadow-lg organic-input ${isOpen && (query.length >= 2 || recentSearches.length > 0)
-                        ? "bg-white/90 border-white rounded-t-[24px] rounded-b-none border-b-white/50"
-                        : "bg-white/70 border-transparent focus:border-white focus:bg-white/90 rounded-[24px]"
+                    className={`organic-input h-14 w-full rounded-[24px] border pl-12 pr-12 font-semibold outline-none transition-all ${isOpen && (query.length >= 2 || recentSearches.length > 0)
+                        ? "rounded-b-none border-[color:var(--border-strong)] bg-[var(--surface-elevated)]"
+                        : "focus:border-[color:var(--border-strong)] focus:bg-[var(--surface-elevated)]"
                         }`}
                 />
                 {query && (
                     <button
+                        type="button"
                         onClick={clearSearch}
-                        className="absolute right-4 p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-all"
+                        className="theme-subtle absolute right-1.5 flex h-11 w-11 items-center justify-center rounded-full transition-all hover:bg-[var(--surface-chip)] hover:text-[var(--text-primary)]"
                     >
                         <X size={18} />
                     </button>
@@ -117,20 +118,22 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
 
             {/* Dropdown Suggestions */}
             {isOpen && (query.length >= 2 || recentSearches.length > 0) && (
-                <div className="absolute top-full mt-0 w-full bg-white/90 backdrop-blur-md rounded-b-[24px] shadow-lg overflow-hidden z-50 border-2 border-white border-t-0 animate-in fade-in duration-200">
+                <div className="surface-card absolute top-full z-50 mt-0 max-h-[min(20rem,calc(100dvh-7rem))] w-full overflow-y-auto overscroll-contain rounded-b-[24px] border-t-0 animate-in fade-in duration-200 [-webkit-overflow-scrolling:touch]">
 
                     {/* Suggestions from API */}
                     {query.length >= 2 && suggestions.length > 0 && (
                         <div className="p-2">
-                            <div className="px-4 h-8 flex items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Suggestions</div>
+                            <div className="theme-section-label flex h-8 items-center px-4 text-[10px] font-bold tracking-widest">Suggestions</div>
                             {suggestions.map((s, i) => (
                                 <button
                                     key={`suggestion-${i}`}
                                     onClick={() => handleSelect(s)}
-                                    className="w-full flex items-center gap-3 px-4 h-12 hover:bg-gray-50/80 rounded-xl transition-colors text-left text-gray-700 font-medium"
+                                    className="theme-heading w-full rounded-xl px-4 text-left font-medium transition-colors hover:bg-[var(--surface-tile)]"
                                 >
-                                    <MapPin size={16} className="text-gray-300" />
+                                    <span className="flex h-12 items-center gap-3">
+                                        <MapPin size={16} className="theme-subtle" />
                                     <span className="truncate">{s.name}</span>
+                                    </span>
                                 </button>
                             ))}
                         </div>
@@ -139,15 +142,17 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
                     {/* Recent Searches */}
                     {recentSearches.length > 0 && query.length < 2 && (
                         <div className="p-2">
-                            <div className="px-4 h-8 flex items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Recent Searches</div>
+                            <div className="theme-section-label flex h-8 items-center px-4 text-[10px] font-bold tracking-widest">Recent Searches</div>
                             {recentSearches.map((r, i) => (
                                 <button
                                     key={`recent-${i}`}
                                     onClick={() => handleSelect(r)}
-                                    className="w-full flex items-center gap-3 px-4 h-12 hover:bg-gray-50/80 rounded-xl transition-colors text-left text-gray-700 font-medium"
+                                    className="theme-heading w-full rounded-xl px-4 text-left font-medium transition-colors hover:bg-[var(--surface-tile)]"
                                 >
-                                    <Clock size={16} className="text-gray-300" />
-                                    <span className="truncate">{r.name}</span>
+                                    <span className="flex h-12 items-center gap-3">
+                                        <Clock size={16} className="theme-subtle" />
+                                        <span className="truncate">{r.name}</span>
+                                    </span>
                                 </button>
                             ))}
                         </div>
@@ -155,11 +160,11 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
 
                     {/* Loading / No Results */}
                     {isLoading && query.length >= 2 && suggestions.length === 0 && (
-                        <div className="px-6 py-4 text-sm text-gray-400 italic">Finding places...</div>
+                        <div className="theme-subtle px-6 py-4 text-sm italic">Finding places...</div>
                     )}
 
                     {!isLoading && query.length >= 2 && suggestions.length === 0 && (
-                        <div className="px-6 py-4 text-sm text-gray-400 italic">No locations found</div>
+                        <div className="theme-subtle px-6 py-4 text-sm italic">No locations found</div>
                     )}
                 </div>
             )}

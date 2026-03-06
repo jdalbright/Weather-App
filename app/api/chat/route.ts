@@ -1,50 +1,90 @@
-import { generateText } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
-import { DEFAULT_PERSONALITY, PERSONALITY_PROMPTS } from '@/lib/personalities';
+import { generateText } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { DEFAULT_PERSONALITY, PERSONALITY_PROMPTS } from "@/lib/personalities";
 
-// Since you mentioned the key is explicitly an AI Gateway Key, we will attempt to proxy 
-// the new Gemini 1.5 Flash model through it. 
-// Vercel AI SDK allows custom provider routing.
+type ChatRequestBody = {
+  personality?: string;
+  customPrompt?: string;
+  weather?: {
+    temp?: number;
+    unit?: string;
+    condition?: string;
+    isDay?: boolean;
+    localTime?: string;
+    sunrise?: string;
+    sunset?: string;
+    windSpeed?: string;
+    rainChance?: number;
+    feelsLike?: number;
+    uvIndex?: number;
+    highTemp?: number;
+    lowTemp?: number;
+    aqi?: number;
+    alerts?: string;
+  };
+};
+
+function getSystemPrompt(body: ChatRequestBody): string {
+  if (typeof body.customPrompt === "string" && body.customPrompt.trim().length > 0) {
+    return body.customPrompt.trim();
+  }
+
+  if (typeof body.personality === "string" && PERSONALITY_PROMPTS[body.personality]) {
+    return PERSONALITY_PROMPTS[body.personality];
+  }
+
+  return PERSONALITY_PROMPTS[DEFAULT_PERSONALITY];
+}
+
+function buildWeatherPrompt(weather: ChatRequestBody["weather"]): string {
+  return [
+    `Current Local Time: ${weather?.localTime ?? "Unknown"}.`,
+    `Weather: ${weather?.temp ?? "?"}°${weather?.unit ?? "F"} (${weather?.condition ?? "Unknown conditions"}).`,
+    `Feels Like: ${weather?.feelsLike ?? "?"}°.`,
+    `Daily High/Low: ${weather?.highTemp ?? "?"}°/${weather?.lowTemp ?? "?"}°.`,
+    `Daylight: ${weather?.isDay ? "Daytime" : "Nighttime"}.`,
+    weather?.sunrise || weather?.sunset
+      ? `Sunrise/Sunset: ${weather?.sunrise ?? "Unknown"}/${weather?.sunset ?? "Unknown"}.`
+      : null,
+    `Wind Speed: ${weather?.windSpeed ?? "Unknown"}.`,
+    `Rain Chance: ${weather?.rainChance ?? 0}%.`,
+    `UV Index: ${weather?.uvIndex ?? 0}.`,
+    weather?.aqi != null ? `Air Quality Index (US AQI): ${weather.aqi}.` : null,
+    weather?.alerts ? `Weather Alerts: ${weather.alerts}.` : null,
+    "Give short, practical advice that reflects the conditions and time of day.",
+  ].filter(Boolean).join(" ");
+}
 
 export async function POST(req: Request) {
-    try {
-        const { weather, personality } = await req.json();
-        const systemPrompt = PERSONALITY_PROMPTS[personality as keyof typeof PERSONALITY_PROMPTS] || PERSONALITY_PROMPTS[DEFAULT_PERSONALITY];
+  try {
+    const body = await req.json() as ChatRequestBody;
+    const systemPrompt = getSystemPrompt(body);
 
-        // Vercel AI Gateway allows us to easily use models from Anthropic/OpenAI without 
-        // needing their specific provider SDKs installed, by faking the OpenAI interface
-        // and routing it through `ai-gateway.vercel.sh`.
-
-        // Let's use the explicit OpenAI compatible interface that Vercel provides:
-        const gatewayProvider = createOpenAI({
-            apiKey: process.env.AI_GATEWAY_API_KEY,
-            baseURL: 'https://ai-gateway.vercel.sh/v1',
-        });
-
-        if (!process.env.AI_GATEWAY_API_KEY) {
-            return Response.json({ text: `[MOCK ${personality}]: Looks like it's ${weather.temp}° out there. (API Key not loaded in .env)` });
-        }
-
-        const { text } = await generateText({
-            // We use Gemini Flash 3.1 Lite per your request!
-            model: gatewayProvider('gemini-3.1-flash-lite-preview'),
-            system: systemPrompt,
-            prompt: `Current Local Time: ${weather.localTime}, Weather: ${weather.temp}°${weather.unit || 'F'} (Feels like ${weather.feelsLike}°), Daily High/Low: ${weather.highTemp}°/${weather.lowTemp}°. Weather Description: ${weather.condition}. Is Day: ${weather.isDay} (Sunrise: ${weather.sunrise}, Sunset: ${weather.sunset}). Wind Speed: ${weather.windSpeed}. Humidity: ${weather.humidity}%. Rain Chance: ${weather.rainChance}%. UV Index: ${weather.uvIndex}. Cloud Cover: ${weather.cloudCover}%. Visibility: ${weather.visibility}. Give short advice considering the time of day and full weather conditions.`,
-        });
-
-        return Response.json({ text });
-
-    } catch (error: unknown) {
-        console.error("AI Generation Error", error);
-        const errorMessage = error instanceof Error ? error.message : "";
-
-        // If it throws an authorization error, we return a helpful message
-        if (errorMessage.includes('API key') || errorMessage.includes('auth') || errorMessage.includes('400')) {
-            return Response.json({
-                text: `[AUTH ERROR]: I tried to use Gemini Flash through the gateway, but the key got rejected. Make sure the gateway URL is linked properly! Error: ${errorMessage}`
-            });
-        }
-
-        return Response.json({ text: `Sorry, I'm feeling under the weather. ${errorMessage}` }, { status: 500 });
+    if (!process.env.AI_GATEWAY_API_KEY) {
+      return Response.json({
+        text: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}]: It's ${body.weather?.temp ?? "?"}°${body.weather?.unit ?? "F"} and ${body.weather?.condition ?? "unclear"}, so plan accordingly.`,
+      });
     }
+
+    const gatewayProvider = createOpenAI({
+      apiKey: process.env.AI_GATEWAY_API_KEY,
+      baseURL: "https://ai-gateway.vercel.sh/v1",
+    });
+
+    const { text } = await generateText({
+      model: gatewayProvider("gemini-3.1-flash-lite-preview"),
+      system: systemPrompt,
+      prompt: buildWeatherPrompt(body.weather),
+    });
+
+    return Response.json({ text });
+  } catch (error) {
+    console.error("AI Generation Error", error);
+    const errorMessage = error instanceof Error ? error.message : "";
+
+    return Response.json(
+      { text: `Sorry, I'm feeling under the weather. ${errorMessage}`.trim() },
+      { status: 500 }
+    );
+  }
 }
