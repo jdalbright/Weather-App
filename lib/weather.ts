@@ -38,9 +38,11 @@ export interface WeatherData {
     time: string[];
     temperature_2m: number[];
     apparent_temperature: number[];
+    relative_humidity_2m: number[];
     weather_code: number[];
     precipitation_probability: number[];
     is_day: number[];
+    wind_speed_10m: number[];
     cloud_cover: number[];
     visibility: number[];
   };
@@ -88,6 +90,37 @@ function extractConsensusSeries(
     : null;
 }
 
+function extractConsensusModeSeries(
+  section: Record<string, Array<number | null> | string[] | undefined> | undefined,
+  baseKey: string,
+  models: ForecastModel[],
+  length: number
+): number[] | null {
+  if (!section) return null;
+
+  const series = Array.from({ length }, (_, index) => {
+    const counts = new Map<number, number>();
+
+    models.forEach((model) => {
+      const values = section[`${baseKey}_${model.id}`];
+      const rawValue = Array.isArray(values) ? (values[index] as number | null | undefined) : null;
+      if (rawValue == null || !Number.isFinite(rawValue)) return;
+
+      const value = Math.round(rawValue);
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    });
+
+    if (counts.size === 0) return null;
+
+    return [...counts.entries()]
+      .sort((a, b) => (b[1] - a[1]) || (a[0] - b[0]))[0][0];
+  });
+
+  return series.some((value) => value != null)
+    ? series.map((value) => value ?? NaN)
+    : null;
+}
+
 function findNearestTimeIndex(times: string[], targetTime?: string): number {
   if (!targetTime || times.length === 0) return -1;
 
@@ -118,7 +151,7 @@ function findNearestTimeIndex(times: string[], targetTime?: string): number {
   return bestIndex;
 }
 
-function mergeConsensusTemperatures(
+function mergeConsensusForecastData(
   baseData: WeatherData,
   modelData: ModelTemperatureResponse | null,
   models: ForecastModel[]
@@ -129,14 +162,35 @@ function mergeConsensusTemperatures(
 
   const hourlyConsensus = extractConsensusSeries(modelData.hourly, "temperature_2m", models, modelData.hourly.time.length);
   const hourlyApparentConsensus = extractConsensusSeries(modelData.hourly, "apparent_temperature", models, modelData.hourly.time.length);
+  const hourlyHumidityConsensus = extractConsensusSeries(modelData.hourly, "relative_humidity_2m", models, modelData.hourly.time.length);
+  const hourlyPrecipProbabilityConsensus = extractConsensusSeries(modelData.hourly, "precipitation_probability", models, modelData.hourly.time.length);
+  const hourlyWindConsensus = extractConsensusSeries(modelData.hourly, "wind_speed_10m", models, modelData.hourly.time.length);
+  const hourlyCloudConsensus = extractConsensusSeries(modelData.hourly, "cloud_cover", models, modelData.hourly.time.length);
+  const hourlyVisibilityConsensus = extractConsensusSeries(modelData.hourly, "visibility", models, modelData.hourly.time.length);
+  const hourlyWeatherCodeConsensus = extractConsensusModeSeries(modelData.hourly, "weather_code", models, modelData.hourly.time.length);
   const dailyMaxConsensus = extractConsensusSeries(modelData.daily, "temperature_2m_max", models, modelData.daily.time.length);
   const dailyMinConsensus = extractConsensusSeries(modelData.daily, "temperature_2m_min", models, modelData.daily.time.length);
+  const dailyPrecipProbabilityConsensus = extractConsensusSeries(modelData.daily, "precipitation_probability_max", models, modelData.daily.time.length);
+  const dailyWeatherCodeConsensus = extractConsensusModeSeries(modelData.daily, "weather_code", models, modelData.daily.time.length);
 
-  if (!hourlyConsensus && !hourlyApparentConsensus && !dailyMaxConsensus && !dailyMinConsensus) {
+  if (
+    !hourlyConsensus
+    && !hourlyApparentConsensus
+    && !hourlyHumidityConsensus
+    && !hourlyPrecipProbabilityConsensus
+    && !hourlyWindConsensus
+    && !hourlyCloudConsensus
+    && !hourlyVisibilityConsensus
+    && !hourlyWeatherCodeConsensus
+    && !dailyMaxConsensus
+    && !dailyMinConsensus
+    && !dailyPrecipProbabilityConsensus
+    && !dailyWeatherCodeConsensus
+  ) {
     return baseData;
   }
 
-  const currentIndex = findNearestTimeIndex(modelData.hourly.time, modelData.current?.time);
+  const currentIndex = findNearestTimeIndex(modelData.hourly.time, baseData.current.time);
   const fallbackHourlyCurrent = hourlyConsensus?.find((value) => !Number.isNaN(value));
   const consensusCurrent = currentIndex >= 0 && hourlyConsensus?.[currentIndex] != null && !Number.isNaN(hourlyConsensus[currentIndex])
     ? hourlyConsensus[currentIndex]
@@ -145,13 +199,43 @@ function mergeConsensusTemperatures(
   const consensusApparent = currentIndex >= 0 && hourlyApparentConsensus?.[currentIndex] != null && !Number.isNaN(hourlyApparentConsensus[currentIndex])
     ? hourlyApparentConsensus[currentIndex]
     : fallbackHourlyApparent;
+  const fallbackHourlyHumidity = hourlyHumidityConsensus?.find((value) => !Number.isNaN(value));
+  const consensusHumidity = currentIndex >= 0 && hourlyHumidityConsensus?.[currentIndex] != null && !Number.isNaN(hourlyHumidityConsensus[currentIndex])
+    ? hourlyHumidityConsensus[currentIndex]
+    : fallbackHourlyHumidity;
+  const fallbackHourlyPrecipProbability = hourlyPrecipProbabilityConsensus?.find((value) => !Number.isNaN(value));
+  const consensusPrecipProbability = currentIndex >= 0 && hourlyPrecipProbabilityConsensus?.[currentIndex] != null && !Number.isNaN(hourlyPrecipProbabilityConsensus[currentIndex])
+    ? hourlyPrecipProbabilityConsensus[currentIndex]
+    : fallbackHourlyPrecipProbability;
+  const fallbackHourlyWind = hourlyWindConsensus?.find((value) => !Number.isNaN(value));
+  const consensusWind = currentIndex >= 0 && hourlyWindConsensus?.[currentIndex] != null && !Number.isNaN(hourlyWindConsensus[currentIndex])
+    ? hourlyWindConsensus[currentIndex]
+    : fallbackHourlyWind;
+  const fallbackHourlyCloud = hourlyCloudConsensus?.find((value) => !Number.isNaN(value));
+  const consensusCloud = currentIndex >= 0 && hourlyCloudConsensus?.[currentIndex] != null && !Number.isNaN(hourlyCloudConsensus[currentIndex])
+    ? hourlyCloudConsensus[currentIndex]
+    : fallbackHourlyCloud;
+  const fallbackHourlyVisibility = hourlyVisibilityConsensus?.find((value) => !Number.isNaN(value));
+  const consensusVisibility = currentIndex >= 0 && hourlyVisibilityConsensus?.[currentIndex] != null && !Number.isNaN(hourlyVisibilityConsensus[currentIndex])
+    ? hourlyVisibilityConsensus[currentIndex]
+    : fallbackHourlyVisibility;
+  const fallbackHourlyWeatherCode = hourlyWeatherCodeConsensus?.find((value) => !Number.isNaN(value));
+  const consensusWeatherCode = currentIndex >= 0 && hourlyWeatherCodeConsensus?.[currentIndex] != null && !Number.isNaN(hourlyWeatherCodeConsensus[currentIndex])
+    ? hourlyWeatherCodeConsensus[currentIndex]
+    : fallbackHourlyWeatherCode;
 
   return {
     ...baseData,
     current: {
       ...baseData.current,
       temperature_2m: consensusCurrent ?? baseData.current.temperature_2m,
+      relative_humidity_2m: consensusHumidity ?? baseData.current.relative_humidity_2m,
       apparent_temperature: consensusApparent ?? baseData.current.apparent_temperature,
+      precipitation_probability: consensusPrecipProbability ?? baseData.current.precipitation_probability,
+      weather_code: consensusWeatherCode ?? baseData.current.weather_code,
+      wind_speed_10m: consensusWind ?? baseData.current.wind_speed_10m,
+      cloud_cover: consensusCloud ?? baseData.current.cloud_cover,
+      visibility: consensusVisibility ?? baseData.current.visibility,
     },
     hourly: {
       ...baseData.hourly,
@@ -161,15 +245,39 @@ function mergeConsensusTemperatures(
       apparent_temperature: hourlyApparentConsensus?.map((value, index) => (
         Number.isNaN(value) ? baseData.hourly.apparent_temperature[index] : value
       )) ?? baseData.hourly.apparent_temperature,
+      relative_humidity_2m: hourlyHumidityConsensus?.map((value, index) => (
+        Number.isNaN(value) ? baseData.hourly.relative_humidity_2m[index] : value
+      )) ?? baseData.hourly.relative_humidity_2m,
+      weather_code: hourlyWeatherCodeConsensus?.map((value, index) => (
+        Number.isNaN(value) ? baseData.hourly.weather_code[index] : value
+      )) ?? baseData.hourly.weather_code,
+      precipitation_probability: hourlyPrecipProbabilityConsensus?.map((value, index) => (
+        Number.isNaN(value) ? baseData.hourly.precipitation_probability[index] : value
+      )) ?? baseData.hourly.precipitation_probability,
+      wind_speed_10m: hourlyWindConsensus?.map((value, index) => (
+        Number.isNaN(value) ? baseData.hourly.wind_speed_10m[index] : value
+      )) ?? baseData.hourly.wind_speed_10m,
+      cloud_cover: hourlyCloudConsensus?.map((value, index) => (
+        Number.isNaN(value) ? baseData.hourly.cloud_cover[index] : value
+      )) ?? baseData.hourly.cloud_cover,
+      visibility: hourlyVisibilityConsensus?.map((value, index) => (
+        Number.isNaN(value) ? baseData.hourly.visibility[index] : value
+      )) ?? baseData.hourly.visibility,
     },
     daily: {
       ...baseData.daily,
+      weather_code: dailyWeatherCodeConsensus?.map((value, index) => (
+        Number.isNaN(value) ? baseData.daily.weather_code[index] : value
+      )) ?? baseData.daily.weather_code,
       temperature_2m_max: dailyMaxConsensus?.map((value, index) => (
         Number.isNaN(value) ? baseData.daily.temperature_2m_max[index] : value
       )) ?? baseData.daily.temperature_2m_max,
       temperature_2m_min: dailyMinConsensus?.map((value, index) => (
         Number.isNaN(value) ? baseData.daily.temperature_2m_min[index] : value
       )) ?? baseData.daily.temperature_2m_min,
+      precipitation_probability_max: dailyPrecipProbabilityConsensus?.map((value, index) => (
+        Number.isNaN(value) ? baseData.daily.precipitation_probability_max[index] : value
+      )) ?? baseData.daily.precipitation_probability_max,
     },
   };
 }
@@ -188,10 +296,10 @@ export async function getWeatherData(
     const windUnitParam = windUnit === "mph" ? "&wind_speed_unit=mph" : "";
     const [baseRes, modelRes] = await Promise.all([
       fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,precipitation_probability,weather_code,wind_speed_10m,cloud_cover,visibility&hourly=temperature_2m,apparent_temperature,weather_code,precipitation_probability,is_day,cloud_cover,visibility&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max,rain_sum,showers_sum,snowfall_sum&timezone=auto&forecast_days=16${tempUnitParam}${windUnitParam}`
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,precipitation_probability,weather_code,wind_speed_10m,cloud_cover,visibility&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,precipitation_probability,wind_speed_10m,is_day,cloud_cover,visibility&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max,rain_sum,showers_sum,snowfall_sum&timezone=auto&forecast_days=16${tempUnitParam}${windUnitParam}`
       ),
       fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature&hourly=temperature_2m,apparent_temperature&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=16&models=${modelParam}${tempUnitParam}`
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,precipitation_probability,wind_speed_10m,cloud_cover,visibility&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=16&models=${modelParam}${tempUnitParam}${windUnitParam}`
       ),
     ]);
 
@@ -201,7 +309,7 @@ export async function getWeatherData(
 
     const data = await baseRes.json() as WeatherData;
     const modelData = modelRes.ok ? await modelRes.json() as ModelTemperatureResponse : null;
-    return mergeConsensusTemperatures(data, modelData, models);
+    return mergeConsensusForecastData(data, modelData, models);
   } catch (error) {
     console.error("Error fetching weather:", error);
     return null;
@@ -325,7 +433,13 @@ export function formatVisibility(meters: number, distUnit: "kmh" | "mph", curren
  */
 export function formatWindSpeed(speed: number, currentUnitsWind: string): string {
   const unit = currentUnitsWind === "mp/h" ? "mph" : currentUnitsWind;
-  return `${speed} ${unit}`;
+  const roundedSpeed = Number.isFinite(speed)
+    ? new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: speed < 10 ? 1 : 0,
+      }).format(speed)
+    : String(speed);
+  return `${roundedSpeed} ${unit}`;
 }
 
 // ─── Air Quality ──────────────────────────────────────────────────────────────

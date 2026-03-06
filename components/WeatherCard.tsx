@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
     getWeatherIconFromCode,
+    getWeatherDescriptionFromCode,
     isLiquidPrecipitationCode,
     WeatherData,
     formatVisibility,
@@ -97,6 +98,7 @@ const statTileClass = "surface-tile flex items-center gap-3 rounded-2xl p-3";
 const statValueClass = "theme-heading font-semibold";
 const forecastTileClass = "surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center gap-2 rounded-2xl p-3";
 const forecastDayTileClass = "surface-tile flex min-w-[80px] shrink-0 snap-start flex-col items-center justify-between gap-1 rounded-2xl p-3 h-[120px]";
+const heroCardClass = "surface-card-strong relative overflow-hidden rounded-[32px] px-5 py-6 sm:px-6";
 const insightGridClass = "mt-3 grid w-full max-w-[26rem] grid-cols-2 gap-2";
 const insightPillClass = "flex min-h-[68px] w-full min-w-0 items-center justify-between gap-3 rounded-[24px] border border-[color:var(--border-soft)] bg-[var(--surface-chip)] text-[var(--text-secondary)] px-3.5 py-3 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover:border-[color:var(--border-strong)] hover:shadow-[var(--shadow-soft)]";
 const insightPillOpenClass = "border-[color:var(--accent-border)] bg-[var(--surface-elevated)] shadow-[var(--shadow-soft)]";
@@ -172,6 +174,9 @@ export default function WeatherCard({
 
     const dailyHigh = Math.round(weatherData.daily.temperature_2m_max[0]);
     const dailyLow = Math.round(weatherData.daily.temperature_2m_min[0]);
+    const currentCondition = getWeatherDescriptionFromCode(current.weather_code);
+    const localTimestamp = getLocalTimeForOffset(weatherData.utc_offset_seconds);
+    const localTimeLabel = format(localTimestamp, "h:mm a");
 
     // Alerts (deduplicated by event name)
     const allAlerts = [
@@ -205,7 +210,8 @@ export default function WeatherCard({
     };
     const conf = forecastConfidence ? confidenceStyle[forecastConfidence.label] : null;
     const confidenceDotClass = conf?.dot ?? "bg-[color:var(--border-contrast)]";
-    const confidenceAggregatedTemp = forecastConfidence?.aggregatedTemp ?? currentTemp;
+    const confidenceAggregatedTemp = currentTemp;
+    const displayTemp = currentTemp;
     const confidenceModelNames = forecastConfidence?.modelNames ?? [];
     const confidenceModelTemps = forecastConfidence?.modelTemps ?? [];
     const confidenceSummaryLabel = forecastConfidence?.label === "High"
@@ -222,7 +228,7 @@ export default function WeatherCard({
             ? Math.round(metar.temp * 9 / 5 + 32)
             : Math.round(metar.temp))
         : null;
-    const metarTempDiff = metarTempDisplay != null ? metarTempDisplay - currentTemp : null;
+    const metarTempDiff = metarTempDisplay != null ? metarTempDisplay - displayTemp : null;
     const showStationTempDelta = metarTempDiff != null && Math.abs(metarTempDiff) >= 1;
     const stationDistanceDisplay = metar?.distance_km != null
         ? distUnit === "mph"
@@ -341,25 +347,43 @@ export default function WeatherCard({
                 </div>
             )}
 
-            {/* Top Header - Always visible */}
-            <div className="flex flex-col items-center text-center gap-4">
-                <div className={`flex h-24 w-24 items-center justify-center rounded-full ${iconBadgeClass}`}>
-                    <IconComponent
-                        size={iconSize}
-                        strokeWidth={iconConfig.strokeWidth ?? 1.75}
-                        className={iconConfig.className}
-                    />
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                    <span className="text-6xl font-bold flex items-center justify-center gap-2">
-                        {currentTemp}&deg;
-                    </span>
-                    <span className="theme-muted font-medium text-xl capitalize">
-                        {locationName || "Current Location"}
-                    </span>
-                    <span className="text-sm font-semibold opacity-70">
-                        H: {dailyHigh}&deg; L: {dailyLow}&deg;
-                    </span>
+            <div className={heroCardClass}>
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_30%)]" />
+                <div className="pointer-events-none absolute -left-12 top-8 h-32 w-32 rounded-full bg-[var(--weather-glow)] blur-3xl opacity-40" />
+                <div className="pointer-events-none absolute -right-10 bottom-6 h-28 w-28 rounded-full bg-[rgba(125,211,252,0.12)] blur-3xl" />
+
+                {/* Top Header - Always visible */}
+                <div className="relative flex flex-col items-center text-center">
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                        <span className="surface-chip-muted rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
+                            {currentCondition}
+                        </span>
+                        <span className="surface-chip-muted rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
+                            Local {localTimeLabel}
+                        </span>
+                    </div>
+
+                    <div className="mt-5 flex flex-col items-center gap-3">
+                        <div className={`flex h-24 w-24 items-center justify-center rounded-full ${iconBadgeClass}`}>
+                            <IconComponent
+                                size={iconSize}
+                                strokeWidth={iconConfig.strokeWidth ?? 1.75}
+                                className={iconConfig.className}
+                            />
+                        </div>
+                        <div className="flex flex-col items-center gap-1">
+                            <span className="theme-heading flex items-center justify-center gap-2 text-6xl font-bold tracking-tight">
+                                {displayTemp}&deg;
+                            </span>
+                            <span className="theme-heading text-[1.7rem] font-bold capitalize leading-none">
+                                {locationName || "Current Location"}
+                            </span>
+                            <span className="theme-muted text-sm font-semibold">
+                                H: {dailyHigh}&deg; L: {dailyLow}&deg;
+                            </span>
+                        </div>
+                    </div>
+
                     {(hasConfidencePill || hasStationPill || hasMinutelyPill) && (
                         <div className={insightGridClass}>
                             {conf && forecastConfidence && (
@@ -375,7 +399,7 @@ export default function WeatherCard({
                                                 {confidenceSummaryLabel ?? "Forecast spread"}
                                             </p>
                                             <p className="theme-subtle mt-0.5 text-xs font-medium">
-                                                {forecastConfidence.aggregatedTemp}&deg; &plusmn;{forecastConfidence.spread}&deg;
+                                                {confidenceAggregatedTemp}&deg; &plusmn;{forecastConfidence.spread}&deg;
                                             </p>
                                         </div>
                                     </div>
@@ -394,7 +418,7 @@ export default function WeatherCard({
                                         </p>
                                         <p className="theme-subtle mt-0.5 truncate text-xs font-medium">
                                             {showStationTempDelta && metarTempDiff != null
-                                                ? `${metarTempDiff > 0 ? "+" : ""}${metarTempDiff}° vs app temp`
+                                                ? `${metarTempDiff > 0 ? "+" : ""}${metarTempDiff}° vs main temp`
                                                 : stationDistanceDisplay ?? stationIcaoId}
                                         </p>
                                     </div>
@@ -423,6 +447,7 @@ export default function WeatherCard({
                             )}
                         </div>
                     )}
+
                     <CollapsiblePanel open={Boolean(conf && forecastConfidence && showConfidenceDetail)} className="mt-2 w-full">
                         <div className="surface-tile rounded-2xl border px-4 py-3">
                             <div className="mb-3 flex items-center justify-between border-b border-[color:var(--border-soft)] pb-2">
@@ -456,7 +481,7 @@ export default function WeatherCard({
                                     <p className="theme-heading text-sm font-bold">{metarTempDisplay}&deg;</p>
                                     {showStationTempDelta && metarTempDiff != null && (
                                         <p className={`text-xs font-bold ${metarTempDiff > 0 ? "text-orange-500" : "text-blue-500"}`}>
-                                            {metarTempDiff > 0 ? "+" : ""}{metarTempDiff}&deg; vs app temp
+                                            {metarTempDiff > 0 ? "+" : ""}{metarTempDiff}&deg; vs main temp
                                         </p>
                                     )}
                                 </div>
@@ -559,8 +584,8 @@ export default function WeatherCard({
             </div>
 
             {/* Personality + AI advice */}
-            <div className="surface-card-strong overflow-hidden rounded-[28px]">
-                <div className="border-b theme-divider bg-[linear-gradient(135deg,rgba(255,255,255,0.08),transparent_70%)] px-4 py-4">
+            <div className="surface-card-strong overflow-hidden rounded-[30px]">
+                <div className="border-b theme-divider bg-[linear-gradient(135deg,rgba(255,255,255,0.08),transparent_75%)] px-5 py-5">
                     <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 items-start gap-3">
                             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm">
@@ -568,13 +593,13 @@ export default function WeatherCard({
                             </div>
                             <div className="min-w-0">
                                 <p className="theme-section-label text-[11px] font-bold tracking-[0.22em]">Forecast Voice</p>
-                                <div className="mt-1 flex flex-wrap items-center gap-2">
-                                    <h2 className="theme-heading text-xl font-bold">{selectedPersonality.label}</h2>
+                                <h2 className="theme-heading mt-1 text-[1.7rem] font-bold leading-none">{selectedPersonality.label}</h2>
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
                                     <span className="surface-chip rounded-full px-2.5 py-1 text-[11px] font-bold">
                                         {selectedPersonality.preview}
                                     </span>
+                                    <span className="theme-muted text-sm">{selectedPersonality.description}</span>
                                 </div>
-                                <p className="theme-muted mt-1 text-sm">{selectedPersonality.description}</p>
                             </div>
                         </div>
 
@@ -589,19 +614,23 @@ export default function WeatherCard({
                 </div>
 
                 <div className="px-5 py-5">
-                    <p className="theme-subtle text-[11px] font-bold uppercase tracking-[0.22em]">Current Read</p>
-                    <p className="theme-heading mt-3 text-lg font-medium leading-relaxed sm:text-xl">
-                        {aiAdvice || "Looking out the window..."}
-                    </p>
+                    <div className="surface-tile-strong rounded-[24px] px-4 py-4">
+                        <p className="theme-subtle text-[11px] font-bold uppercase tracking-[0.22em]">Current Read</p>
+                        <p className="theme-heading mt-3 text-lg font-medium leading-relaxed sm:text-xl">
+                            {aiAdvice || "Looking out the window..."}
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            <button
-                onClick={onToggleDetail}
-                className="organic-button mx-auto mt-2 mb-2 text-sm"
-            >
-                {isDetailed ? "Show Less" : "Show Detail"}
-            </button>
+            <div className="surface-card rounded-[28px] p-3">
+                <button
+                    onClick={onToggleDetail}
+                    className="organic-button w-full justify-center text-sm"
+                >
+                    {isDetailed ? "Show Less" : "Show Detail"}
+                </button>
+            </div>
 
             {/* Detailed View Section */}
             <CollapsiblePanel open={isDetailed} className="w-full">
