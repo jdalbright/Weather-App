@@ -105,8 +105,18 @@ const insightGridClass = "mt-3 grid w-full max-w-[26rem] grid-cols-2 gap-2";
 const insightPillClass = "flex min-h-[76px] w-full min-w-0 items-center justify-between gap-3 rounded-[24px] border border-[color:var(--border-soft)] bg-[var(--surface-chip)] text-[var(--text-secondary)] px-4 py-3.5 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover:border-[color:var(--border-strong)] hover:shadow-[var(--shadow-soft)]";
 const insightPillOpenClass = "border-[color:var(--accent-border)] bg-[var(--surface-elevated)] shadow-[var(--shadow-soft)]";
 const sectionAccordionButtonClass = "surface-tile flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[24px] px-4 py-3 text-left transition-all hover:border-[color:var(--border-strong)] hover:bg-[var(--surface-elevated)]";
+const MIN_FORECAST_CHANCE_TO_SHOW = 15;
 type DetailSectionId = "forecast" | "conditions" | "extras";
 type SourceSectionId = "hero" | "alerts" | "conditions" | "forecast" | "extras";
+
+function shouldShowForecastChance(probability: number | null | undefined): probability is number {
+    return probability != null && probability >= MIN_FORECAST_CHANCE_TO_SHOW;
+}
+
+function formatCurrentPrecipChance(probability: number): string {
+    if (probability < MIN_FORECAST_CHANCE_TO_SHOW) return "Low";
+    return `${probability}%`;
+}
 
 type WeatherCardProps = {
     locationName: string,
@@ -293,6 +303,8 @@ export default function WeatherCard({
         ? "Watch the darker bars for strongest precip"
         : "Flat bars mean no meaningful precip signal";
     const maxMinutelyIntensity = minutelyTimeline.reduce((max, point) => Math.max(max, point.precip_intensity), 0);
+    const peakMinutelyChance = Math.round(Math.max(...minutelyTimeline.map((point) => point.precip_probability), 0) * 100);
+    const currentPrecipChanceLabel = formatCurrentPrecipChance(current.precipitation_probability);
     const hasConfidencePill = Boolean(conf && forecastConfidence);
     const hasStationPill = metarTempDisplay != null;
     const hasMinutelyPill = Boolean(showMinutelyBanner && rainSummary);
@@ -664,9 +676,15 @@ export default function WeatherCard({
                                         </div>
                                     </div>
                                     <div className="mt-3 flex flex-wrap gap-2">
-                                        <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
-                                            Peak chance {Math.round(Math.max(...minutelyTimeline.map((point) => point.precip_probability), 0) * 100)}%
-                                        </span>
+                                        {shouldShowForecastChance(peakMinutelyChance) ? (
+                                            <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
+                                                Peak chance {peakMinutelyChance}%
+                                            </span>
+                                        ) : (
+                                            <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
+                                                Weak signal
+                                            </span>
+                                        )}
                                         <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
                                             {minutelyGuidanceText}
                                         </span>
@@ -811,7 +829,7 @@ export default function WeatherCard({
                                         <Droplets className="text-blue-500" size={20} />
                                         <div className="flex flex-col">
                                             <span className="theme-section-label text-xs font-bold">Precip Chance</span>
-                                            <span className={statValueClass}>{current.precipitation_probability}%</span>
+                                            <span className={statValueClass}>{currentPrecipChanceLabel}</span>
                                         </div>
                                     </div>
                                     <div className={statTileClass}>
@@ -1038,7 +1056,7 @@ export default function WeatherCard({
                                                                 />
                                                                 <div className="flex flex-col items-center">
                                                                     <span className="font-bold">{event.temp}&deg;</span>
-                                                                    {(event.pop ?? 0) > 0 && (
+                                                                    {shouldShowForecastChance(event.pop) && (
                                                                         <span className="text-[10px] font-bold text-blue-500">{event.pop}%</span>
                                                                     )}
                                                                 </div>
@@ -1086,7 +1104,7 @@ export default function WeatherCard({
                                                 const dayPrecipProbability = weatherData.daily.precipitation_probability_max?.[index] ?? 0;
                                                 const dayRainTotal = (weatherData.daily.rain_sum?.[index] ?? 0) + (weatherData.daily.showers_sum?.[index] ?? 0);
                                                 const daySnowfallTotal = weatherData.daily.snowfall_sum?.[index] ?? 0;
-                                                const showRainChance = dayPrecipProbability > 0
+                                                const showRainChance = shouldShowForecastChance(dayPrecipProbability)
                                                     && dayRainTotal > 0
                                                     && daySnowfallTotal === 0
                                                     && isLiquidPrecipitationCode(dayCode);
