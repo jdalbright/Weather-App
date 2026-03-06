@@ -97,6 +97,9 @@ const statTileClass = "surface-tile flex items-center gap-3 rounded-2xl p-3";
 const statValueClass = "theme-heading font-semibold";
 const forecastTileClass = "surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center gap-2 rounded-2xl p-3";
 const forecastDayTileClass = "surface-tile flex min-w-[80px] shrink-0 snap-start flex-col items-center justify-between gap-1 rounded-2xl p-3 h-[120px]";
+const insightGridClass = "mt-3 grid w-full max-w-[26rem] grid-cols-2 gap-2";
+const insightPillClass = "flex min-h-[68px] w-full min-w-0 items-center justify-between gap-3 rounded-[24px] border border-[color:var(--border-soft)] bg-[var(--surface-chip)] text-[var(--text-secondary)] px-3.5 py-3 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover:border-[color:var(--border-strong)] hover:shadow-[var(--shadow-soft)]";
+const insightPillOpenClass = "border-[color:var(--accent-border)] bg-[var(--surface-elevated)] shadow-[var(--shadow-soft)]";
 
 type WeatherCardProps = {
     locationName: string,
@@ -241,6 +244,9 @@ export default function WeatherCard({
     const minutelyBadgeClass = rainSummary?.isRaining
         ? "border-blue-200 bg-blue-50 text-blue-700"
         : "surface-chip";
+    const minutelyPillToneClass = rainSummary?.isRaining
+        ? "border-blue-200 bg-blue-50 text-blue-700"
+        : "border-[color:var(--border-soft)] bg-[var(--surface-chip)] text-[var(--text-secondary)]";
     const minutelyStatusLabel = rainSummary?.isRaining ? "Rain signal" : "Stays dry";
     const minutelyWindowLabel = "Next hour";
     const minutelySummaryText = rainSummary?.summary ?? "No precipitation expected in the next hour.";
@@ -248,6 +254,10 @@ export default function WeatherCard({
         ? "Watch the darker bars for strongest precip"
         : "Flat bars mean no meaningful precip signal";
     const maxMinutelyIntensity = minutelyTimeline.reduce((max, point) => Math.max(max, point.precip_intensity), 0);
+    const hasConfidencePill = Boolean(conf && forecastConfidence);
+    const hasStationPill = metarTempDisplay != null;
+    const hasMinutelyPill = Boolean(showMinutelyBanner && rainSummary);
+    const stationNeedsAttention = showStationTempDelta && metarTempDiff != null && Math.abs(metarTempDiff) >= 3;
 
     const sourceEntries = [
         {
@@ -350,53 +360,65 @@ export default function WeatherCard({
                     <span className="text-sm font-semibold opacity-70">
                         H: {dailyHigh}&deg; L: {dailyLow}&deg;
                     </span>
-                    {(forecastConfidence || metarTempDiff != null || showMinutelyBanner) && (
-                        <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+                    {(hasConfidencePill || hasStationPill || hasMinutelyPill) && (
+                        <div className={insightGridClass}>
                             {conf && forecastConfidence && (
                                 <button
                                     onClick={() => setShowConfidenceDetail(v => !v)}
-                                    className="surface-chip flex min-h-11 items-center gap-2 rounded-full px-3.5 py-2 text-left active:opacity-70 transition-all hover:border-[color:var(--border-strong)]"
+                                    className={`${insightPillClass} ${showConfidenceDetail ? insightPillOpenClass : ""} ${!hasStationPill ? "col-span-2" : ""}`}
                                 >
-                                    <span className={`h-2 w-2 rounded-full ${confidenceDotClass}`} />
-                                    <div className="flex flex-col items-start leading-none">
-                                        <span className="theme-subtle text-[10px] font-bold uppercase tracking-[0.18em]">Models</span>
-                                        {confidenceSummaryLabel && (
-                                            <span className="theme-muted mt-1 text-[11px] font-semibold">{confidenceSummaryLabel}</span>
-                                        )}
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${confidenceDotClass}`} />
+                                        <div className="min-w-0">
+                                            <p className="theme-section-label text-[10px] font-bold tracking-[0.2em]">Models</p>
+                                            <p className="theme-heading mt-1 truncate text-sm font-semibold leading-tight">
+                                                {confidenceSummaryLabel ?? "Forecast spread"}
+                                            </p>
+                                            <p className="theme-subtle mt-0.5 text-xs font-medium">
+                                                {forecastConfidence.aggregatedTemp}&deg; &plusmn;{forecastConfidence.spread}&deg;
+                                            </p>
+                                        </div>
                                     </div>
-                                    <span className="theme-heading text-xs font-semibold">
-                                        {forecastConfidence.aggregatedTemp}&deg; &plusmn;{forecastConfidence.spread}&deg;
-                                    </span>
-                                    <ChevronDown className={`theme-subtle h-3.5 w-3.5 transition-transform ${showConfidenceDetail ? "rotate-180" : ""}`} />
+                                    <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showConfidenceDetail ? "rotate-180" : ""}`} />
                                 </button>
                             )}
                             {metarTempDisplay != null && (
                                 <button
                                     onClick={() => setShowStationDetail(v => !v)}
-                                    className={`flex min-h-11 items-center gap-2 rounded-full border px-3 py-2 transition-all active:opacity-70 ${showStationTempDelta && metarTempDiff != null && Math.abs(metarTempDiff) >= 3
-                                        ? "border-orange-200 bg-orange-50"
-                                        : "surface-chip hover:border-[color:var(--border-strong)]"
-                                        }`}
+                                    className={`${insightPillClass} ${showStationDetail ? insightPillOpenClass : ""} ${stationNeedsAttention ? "border-orange-300/70 bg-[linear-gradient(135deg,rgba(251,146,60,0.16),rgba(255,255,255,0.08))]" : ""} ${!hasConfidencePill ? "col-span-2" : ""}`}
                                 >
-                                    <span className="theme-subtle text-[11px] font-bold uppercase tracking-wide">Station</span>
-                                    <span className="theme-heading text-xs font-semibold">
-                                        {metarTempDisplay}&deg;
-                                        {showStationTempDelta && metarTempDiff != null ? ` ${metarTempDiff > 0 ? "+" : ""}${metarTempDiff}°` : ""}
-                                    </span>
-                                    <ChevronDown className={`theme-subtle h-3.5 w-3.5 transition-transform ${showStationDetail ? "rotate-180" : ""}`} />
+                                    <div className="min-w-0">
+                                        <p className="theme-section-label text-[10px] font-bold tracking-[0.2em]">Station</p>
+                                        <p className="theme-heading mt-1 truncate text-sm font-semibold leading-tight">
+                                            {metarTempDisplay}&deg; observed
+                                        </p>
+                                        <p className="theme-subtle mt-0.5 truncate text-xs font-medium">
+                                            {showStationTempDelta && metarTempDiff != null
+                                                ? `${metarTempDiff > 0 ? "+" : ""}${metarTempDiff}° vs app temp`
+                                                : stationDistanceDisplay ?? stationIcaoId}
+                                        </p>
+                                    </div>
+                                    <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showStationDetail ? "rotate-180" : ""}`} />
                                 </button>
                             )}
                             {showMinutelyBanner && rainSummary && (
                                 <button
                                     onClick={() => setShowMinutelyDetail(v => !v)}
-                                    className={`flex min-h-11 items-center gap-2 rounded-full border px-3 py-2 transition-all active:opacity-70 ${minutelyBadgeClass}`}
+                                    className={`${insightPillClass} ${showMinutelyDetail ? insightPillOpenClass : ""} ${minutelyPillToneClass} col-span-2`}
                                 >
-                                    <CloudRain className={minutelyIconClass} size={14} />
-                                    <span className="text-[11px] font-bold uppercase tracking-wide">{minutelyWindowLabel}</span>
-                                    <span className="text-xs font-semibold">
-                                        {minutelyStatusLabel}
-                                    </span>
-                                    <ChevronDown className={`theme-subtle h-3.5 w-3.5 transition-transform ${showMinutelyDetail ? "rotate-180" : ""}`} />
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <CloudRain className={`${minutelyIconClass} shrink-0`} size={16} />
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">{minutelyWindowLabel}</p>
+                                            <p className="mt-1 truncate text-sm font-semibold leading-tight">
+                                                {minutelyStatusLabel}
+                                            </p>
+                                            <p className="mt-0.5 truncate text-xs font-medium opacity-75">
+                                                5-minute precipitation outlook
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showMinutelyDetail ? "rotate-180" : ""}`} />
                                 </button>
                             )}
                         </div>
