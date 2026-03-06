@@ -122,7 +122,7 @@ export default function Home() {
 
           <button
             onClick={() => setUnit(unit === "celsius" ? "fahrenheit" : "celsius")}
-            className="bg-white/70 backdrop-blur-md shadow-lg rounded-[24px] px-6 font-bold text-gray-800 hover:bg-white transition-colors flex items-center justify-center min-w-[70px] h-[64px]"
+            className="bg-white/70 backdrop-blur-md shadow-lg rounded-[24px] px-6 font-bold text-gray-800 hover:bg-white transition-colors flex items-center justify-center min-w-[70px] h-[52px]"
           >
             &deg;{unit === "celsius" ? "C" : "F"}
           </button>
