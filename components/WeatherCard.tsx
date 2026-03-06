@@ -1062,7 +1062,7 @@ export default function WeatherCard({
                                                 <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${confidenceDotClass}`} />
                                                 <div className="min-w-0">
                                                     <p className="theme-section-label text-[10px] font-bold tracking-[0.2em]">Models</p>
-                                                    <p className="theme-heading mt-1 truncate text-sm font-semibold leading-tight">
+                                                    <p className="theme-heading mt-1 line-clamp-2 text-sm font-semibold leading-tight">
                                                         {confidenceSummaryLabel ?? "Forecast spread"}
                                                     </p>
                                                     <p className="theme-subtle mt-0.5 text-xs font-medium">
@@ -1080,10 +1080,10 @@ export default function WeatherCard({
                                         >
                                             <div className="min-w-0">
                                                 <p className="theme-section-label text-[10px] font-bold tracking-[0.2em]">Station</p>
-                                                <p className="theme-heading mt-1 truncate text-sm font-semibold leading-tight">
+                                                <p className="theme-heading mt-1 line-clamp-2 text-sm font-semibold leading-tight">
                                                     {metarTempDisplay}&deg; observed
                                                 </p>
-                                                <p className="theme-subtle mt-0.5 truncate text-xs font-medium">
+                                                <p className="theme-subtle mt-0.5 line-clamp-2 text-xs font-medium">
                                                     {showStationTempDelta && metarTempDiff != null
                                                         ? `${metarTempDiff > 0 ? "+" : ""}${metarTempDiff}° vs main temp`
                                                         : stationDistanceDisplay ?? stationIcaoId}
@@ -1097,14 +1097,14 @@ export default function WeatherCard({
                                             onClick={() => setShowMinutelyDetail(v => !v)}
                                             className={`${insightPillClass} ${showMinutelyDetail ? insightPillOpenClass : ""} ${minutelyPillToneClass} col-span-2 sm:col-span-1`}
                                         >
-                                            <div className="flex min-w-0 items-center gap-3">
+                                            <div className="flex min-w-0 items-center gap-2">
                                                 <CloudRain className={`${minutelyIconClass} shrink-0`} size={16} />
                                                 <div className="min-w-0">
                                                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">{minutelyWindowLabel}</p>
-                                                    <p className="mt-1 truncate text-sm font-semibold leading-tight">
+                                                    <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">
                                                         {minutelyStatusLabel}
                                                     </p>
-                                                    <p className="mt-0.5 truncate text-xs font-medium opacity-75">
+                                                    <p className="mt-0.5 line-clamp-2 text-xs font-medium opacity-75">
                                                         Next-hour rain trend in 5-minute steps
                                                     </p>
                                                 </div>
