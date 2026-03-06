@@ -176,6 +176,9 @@ export default function Home() {
   type WeatherResponse = NonNullable<Awaited<ReturnType<typeof getWeatherData>>>;
 
   const [coords, setCoords] = useState<{ lat: number; lon: number; countryCode?: string | null } | null>(null);
+  const [isUsingCurrentLocation, setIsUsingCurrentLocation] = useState(false);
+  const [geoCoords, setGeoCoords] = useState<{ lat: number; lon: number; countryCode?: string | null } | null>(null);
+  const [geoLocationName, setGeoLocationName] = useState<string | null>(null);
   const [weather, setWeather] = useState<WeatherResponse | null>(null);
   const [airQuality, setAirQuality] = useState<AirQualityData | null>(null);
   const [marine, setMarine] = useState<MarineData | null>(null);
@@ -543,19 +546,32 @@ export default function Home() {
             const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${position.coords.latitude}&lon=${position.coords.longitude}&format=json`);
             if (geoRes.ok) {
               const geoData = await geoRes.json();
-              setLocationName(geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.county || "Current Location");
-              setCoords({
+              const name = geoData.address.city || geoData.address.town || geoData.address.village || geoData.address.county || "Current Location";
+              const resolvedCoords = {
                 lat: position.coords.latitude,
                 lon: position.coords.longitude,
                 countryCode: geoData.address.country_code?.toUpperCase() ?? null,
-              });
+              };
+              setLocationName(name);
+              setGeoLocationName(name);
+              setGeoCoords(resolvedCoords);
+              setIsUsingCurrentLocation(true);
+              setCoords(resolvedCoords);
             } else {
               setLocationName("Current Location");
-              setCoords({ lat: position.coords.latitude, lon: position.coords.longitude });
+              setGeoLocationName("Current Location");
+              const resolvedCoords = { lat: position.coords.latitude, lon: position.coords.longitude };
+              setGeoCoords(resolvedCoords);
+              setIsUsingCurrentLocation(true);
+              setCoords(resolvedCoords);
             }
           } catch {
             setLocationName("Current Location");
-            setCoords({ lat: position.coords.latitude, lon: position.coords.longitude });
+            setGeoLocationName("Current Location");
+            const resolvedCoords = { lat: position.coords.latitude, lon: position.coords.longitude };
+            setGeoCoords(resolvedCoords);
+            setIsUsingCurrentLocation(true);
+            setCoords(resolvedCoords);
           }
         },
         () => {
@@ -702,9 +718,18 @@ export default function Home() {
 
   // Handle location selection from search
   const handleLocationSelect = async (lat: number, lon: number, name: string, countryCode?: string | null) => {
+    setIsUsingCurrentLocation(false);
     setLocationName(name);
     setCoords({ lat, lon, countryCode });
   };
+
+  const handleCurrentLocationSelect = useCallback(() => {
+    if (geoCoords && geoLocationName) {
+      setIsUsingCurrentLocation(true);
+      setLocationName(geoLocationName);
+      setCoords(geoCoords);
+    }
+  }, [geoCoords, geoLocationName]);
 
   const selectedPersonality = getPersonality(personality, customPersonalities);
 
@@ -806,7 +831,13 @@ export default function Home() {
 
         <div className="flex gap-2 relative z-50">
           <div className="flex-1 relative">
-            <SearchBar onLocationSelect={handleLocationSelect} />
+            <SearchBar
+              onLocationSelect={handleLocationSelect}
+              onCurrentLocationSelect={handleCurrentLocationSelect}
+              isCurrentLocation={isUsingCurrentLocation}
+              hasCurrentLocation={geoCoords !== null}
+              currentLocationName={geoLocationName ?? undefined}
+            />
           </div>
 
           <button

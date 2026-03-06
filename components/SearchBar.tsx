@@ -1,17 +1,28 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Search, X, Clock, MapPin } from "lucide-react";
+import { Search, X, Clock, MapPin, LocateFixed } from "lucide-react";
 import { geocodeLocation, GeocodeResult } from "@/lib/weather";
 
 interface SearchBarProps {
     onLocationSelect: (lat: number, lon: number, name: string, countryCode?: string | null) => void;
+    onCurrentLocationSelect?: () => void;
+    isCurrentLocation?: boolean;
+    hasCurrentLocation?: boolean;
+    currentLocationName?: string;
     placeholder?: string;
 }
 
 const RECENT_SEARCHES_KEY = "weather_recent_searches";
 
-export default function SearchBar({ onLocationSelect, placeholder = "Search city..." }: SearchBarProps) {
+export default function SearchBar({
+    onLocationSelect,
+    onCurrentLocationSelect,
+    isCurrentLocation = false,
+    hasCurrentLocation = false,
+    currentLocationName,
+    placeholder = "Search city...",
+}: SearchBarProps) {
     const [query, setQuery] = useState("");
     const [suggestions, setSuggestions] = useState<GeocodeResult[]>([]);
     const [recentSearches, setRecentSearches] = useState<GeocodeResult[]>(() => {
@@ -94,6 +105,14 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
         dismissKeyboard();
     };
 
+    const handleCurrentLocation = () => {
+        onCurrentLocationSelect?.();
+        setQuery("");
+        setSuggestions([]);
+        setIsOpen(false);
+        dismissKeyboard();
+    };
+
     const clearSearch = () => {
         setQuery("");
         setSuggestions([]);
@@ -105,14 +124,16 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
         closeSuggestions();
     };
 
-    const totalVisibleResults = (query.length >= 2 ? suggestions.length : recentSearches.length);
+    const showCurrentLocationOption = hasCurrentLocation && (!isCurrentLocation || query.length >= 2);
+    const totalVisibleResults = (query.length >= 2 ? suggestions.length : recentSearches.length) + (showCurrentLocationOption ? 1 : 0);
     const showScrollHint = totalVisibleResults > 4;
+    const dropdownOpen = isOpen && (query.length >= 2 || recentSearches.length > 0 || hasCurrentLocation);
 
     return (
         <div className="relative w-full" ref={containerRef}>
             <form className="relative flex items-center group" onSubmit={handleSubmit}>
-                <div className="theme-subtle absolute left-4 transition-colors group-focus-within:text-[var(--text-primary)]">
-                    <Search size={20} />
+                <div className={`absolute left-4 transition-colors group-focus-within:text-[var(--text-primary)] ${isCurrentLocation ? "text-[var(--accent-text)]" : "theme-subtle"}`}>
+                    {isCurrentLocation ? <LocateFixed size={20} /> : <Search size={20} />}
                 </div>
                 <input
                     ref={inputRef}
@@ -127,9 +148,9 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
                         }
                     }}
                     onFocus={() => setIsOpen(true)}
-                    placeholder={placeholder}
+                    placeholder={isCurrentLocation && !query ? (currentLocationName ?? "Current Location") : placeholder}
                     enterKeyHint="done"
-                    className={`organic-input h-14 w-full rounded-[24px] border pl-12 pr-24 font-semibold outline-none transition-all ${isOpen && (query.length >= 2 || recentSearches.length > 0)
+                    className={`organic-input h-14 w-full rounded-[24px] border pl-12 pr-24 font-semibold outline-none transition-all ${dropdownOpen
                         ? "rounded-b-none border-[color:var(--border-strong)] bg-[var(--surface-elevated)]"
                         : "focus:border-[color:var(--border-strong)] focus:bg-[var(--surface-elevated)]"
                         }`}
@@ -155,7 +176,7 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
             </form>
 
             {/* Dropdown Suggestions */}
-            {isOpen && (query.length >= 2 || recentSearches.length > 0) && (
+            {dropdownOpen && (
                 <div
                     className="search-dropdown surface-card absolute top-full z-50 mt-0 max-h-[min(18rem,calc(100dvh-8rem))] w-full overflow-y-auto overscroll-contain rounded-b-[24px] border-t-0 animate-in fade-in duration-200 [-webkit-overflow-scrolling:touch]"
                     onTouchStart={dismissKeyboard}
@@ -172,6 +193,23 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
                             Done
                         </button>
                     </div>
+
+                    {/* Current Location option */}
+                    {showCurrentLocationOption && (
+                        <div className="p-2 pb-0">
+                            <button
+                                onClick={handleCurrentLocation}
+                                className="w-full rounded-xl px-4 py-1 text-left font-medium transition-colors hover:bg-[var(--surface-tile)] text-[var(--accent-text)]"
+                            >
+                                <span className="flex min-h-[52px] items-center gap-3">
+                                    <LocateFixed size={16} className="shrink-0" />
+                                    <span className="truncate">
+                                        {currentLocationName ? `Use Current Location · ${currentLocationName}` : "Use Current Location"}
+                                    </span>
+                                </span>
+                            </button>
+                        </div>
+                    )}
 
                     {/* Suggestions from API */}
                     {query.length >= 2 && suggestions.length > 0 && (
