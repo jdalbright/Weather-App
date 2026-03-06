@@ -8,27 +8,23 @@
   --color-rain-blue: #60a5fa;
   --color-rain-dark: #3b82f6;
   --color-sky-blue: #bae6fd;
-  
+
   --color-text-primary: #334155;
   --color-text-secondary: #64748b;
-  
+
   --font-sans: 'Quicksand', 'Nunito', sans-serif;
 }
 
 :root {
   --app-bg: var(--color-sky-blue);
-  --card-bg: rgba(255, 255, 255, 0.85); /* Not glass! Just semi-transparent white for organic feel */
+  --card-bg: rgba(255, 255, 255, 0.85);
+  /* Not glass! Just semi-transparent white for organic feel */
   --card-shadow: 0 10px 40px -10px rgba(59, 130, 246, 0.15);
   --border-radius-large: 32px;
   --border-radius-medium: 24px;
   --border-radius-small: 16px;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
 
 html,
 body {
@@ -76,13 +72,16 @@ body {
   height: 8px;
   width: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--color-cloud-gray);
   border-radius: 10px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-secondary);
 }
@@ -91,10 +90,12 @@ body {
 body.theme-sun {
   --app-bg: linear-gradient(to bottom, #bae6fd, #fdf4ff);
 }
+
 body.theme-rain {
   --app-bg: linear-gradient(to bottom, #94a3b8, #cbd5e1);
   --card-shadow: 0 10px 40px -10px rgba(15, 23, 42, 0.15);
 }
+
 body.theme-cloud {
   --app-bg: linear-gradient(to bottom, #e2e8f0, #f8fafc);
   --card-shadow: 0 10px 40px -10px rgba(100, 116, 139, 0.15);

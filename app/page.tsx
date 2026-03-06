@@ -112,20 +112,19 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen px-4 md:px-8 pb-8 flex flex-col items-center gap-8 transition-colors duration-1000">
-
-      {/* Spacer to guarantee distance from the top */}
-      <div className="h-16 md:h-24 w-full shrink-0"></div>
+    <main className="min-h-screen px-4 md:px-8 pt-8 pb-8 flex flex-col items-center gap-8 transition-colors duration-1000">
 
       {/* Top Search, Units & Personality Settings */}
-      <div className="w-full max-w-lg flex flex-col gap-4">
+      <div className="w-full max-w-lg flex flex-col gap-8">
 
-        <div className="flex gap-2">
-          <SearchBar onLocationSelect={handleLocationSelect} />
+        <div className="flex gap-2 relative z-50">
+          <div className="flex-1 relative">
+            <SearchBar onLocationSelect={handleLocationSelect} />
+          </div>
 
           <button
             onClick={() => setUnit(unit === "celsius" ? "fahrenheit" : "celsius")}
-            className="bg-white/70 backdrop-blur-md shadow-lg rounded-[24px] px-6 py-3 border-2 border-transparent font-bold text-gray-800 hover:bg-white transition-colors flex items-center justify-center min-w-[70px]"
+            className="bg-white/70 backdrop-blur-md shadow-lg rounded-[24px] px-6 h-14 border-2 border-transparent font-bold text-gray-800 hover:bg-white transition-colors flex items-center justify-center min-w-[70px]"
           >
             &deg;{unit === "celsius" ? "C" : "F"}
           </button>
@@ -136,7 +135,7 @@ export default function Home() {
             <button
               key={p.id}
               onClick={() => handlePersonalityChange(p.id)}
-              className={`flex-1 min-w-[80px] text-sm font-bold py-2 px-4 rounded-full transition-all duration-300 ${personality === p.id
+              className={`flex-1 min-w-[80px] h-10 flex items-center justify-center text-sm font-bold px-4 rounded-full transition-all duration-300 ${personality === p.id
                 ? "bg-white text-gray-800 shadow-md"
                 : "text-gray-500 hover:text-gray-700 hover:bg-white/20"
                 }`}

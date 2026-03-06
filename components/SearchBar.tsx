@@ -97,9 +97,9 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
                     }}
                     onFocus={() => setIsOpen(true)}
                     placeholder={placeholder}
-                    className={`w-full backdrop-blur-md py-3 pl-12 pr-12 outline-none border-2 transition-all text-gray-800 font-semibold shadow-lg organic-input ${isOpen && (query.length >= 2 || recentSearches.length > 0)
-                            ? "bg-white/90 border-white rounded-t-[24px] rounded-b-none border-b-white/50"
-                            : "bg-white/70 border-transparent focus:border-white focus:bg-white/90 rounded-[24px]"
+                    className={`w-full h-14 backdrop-blur-md pl-12 pr-12 outline-none border-2 transition-all text-gray-800 font-semibold shadow-lg organic-input ${isOpen && (query.length >= 2 || recentSearches.length > 0)
+                        ? "bg-white/90 border-white rounded-t-[24px] rounded-b-none border-b-white/50"
+                        : "bg-white/70 border-transparent focus:border-white focus:bg-white/90 rounded-[24px]"
                         }`}
                 />
                 {query && (
@@ -119,12 +119,12 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
                     {/* Suggestions from API */}
                     {query.length >= 2 && suggestions.length > 0 && (
                         <div className="p-2">
-                            <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Suggestions</div>
+                            <div className="px-4 h-8 flex items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Suggestions</div>
                             {suggestions.map((s, i) => (
                                 <button
                                     key={`suggestion-${i}`}
                                     onClick={() => handleSelect(s)}
-                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50/80 rounded-xl transition-colors text-left text-gray-700 font-medium"
+                                    className="w-full flex items-center gap-3 px-4 h-12 hover:bg-gray-50/80 rounded-xl transition-colors text-left text-gray-700 font-medium"
                                 >
                                     <MapPin size={16} className="text-gray-300" />
                                     <span className="truncate">{s.name}</span>
@@ -136,12 +136,12 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
                     {/* Recent Searches */}
                     {recentSearches.length > 0 && query.length < 2 && (
                         <div className="p-2">
-                            <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Recent Searches</div>
+                            <div className="px-4 h-8 flex items-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Recent Searches</div>
                             {recentSearches.map((r, i) => (
                                 <button
                                     key={`recent-${i}`}
                                     onClick={() => handleSelect(r)}
-                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50/80 rounded-xl transition-colors text-left text-gray-700 font-medium"
+                                    className="w-full flex items-center gap-3 px-4 h-12 hover:bg-gray-50/80 rounded-xl transition-colors text-left text-gray-700 font-medium"
                                 >
                                     <Clock size={16} className="text-gray-300" />
                                     <span className="truncate">{r.name}</span>
