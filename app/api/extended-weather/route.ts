@@ -56,7 +56,7 @@ export async function GET(req: Request) {
       ? fetch(`https://api.weatherapi.com/v1/forecast.json?key=${weatherApiKey}&q=${q}&days=1&alerts=yes`)
       : Promise.resolve(null),
     fetch(
-      `https://aviationweather.gov/api/data/airport?bbox=${(lat - 1.5).toFixed(4)},${(lon - 1.5).toFixed(4)},${(lat + 1.5).toFixed(4)},${(lon + 1.5).toFixed(4)}&format=json`,
+      `https://aviationweather.gov/api/data/metar?bbox=${(lat - 1.5).toFixed(4)},${(lon - 1.5).toFixed(4)},${(lat + 1.5).toFixed(4)},${(lon + 1.5).toFixed(4)}&format=json`,
       { headers: { "User-Agent": USER_AGENT } }
     ),
     pirateKey
@@ -101,62 +101,56 @@ export async function GET(req: Request) {
     }
   }
 
-  // — METAR (actual airport observations) —
+  // — METAR (nearest active weather station) —
+  // Query the METAR endpoint directly by bounding box so we only consider stations
+  // that are actively reporting. This avoids the prior two-step approach (airport
+  // lookup → METAR fetch) which could select a distant airport when the nearest
+  // airport's coordinates were wrong or missing in the /airport dataset.
   let metar: MetarData | null = null;
   let metarConnected = false;
   if (metarAirportRes.status === "fulfilled" && metarAirportRes.value.ok) {
     metarConnected = true;
     try {
-      const airports = await metarAirportRes.value.json();
-      const nearestAirport = Array.isArray(airports)
-        ? airports
-          .filter((a: { icaoId?: string }) => typeof a?.icaoId === "string")
-          .reduce((closest: { icaoId: string; name?: string; lat?: number; lon?: number } | null, airport: { icaoId: string; name?: string; lat?: number; lon?: number }) => {
-            if (!closest) return airport;
-            const airportLat = toNumber(airport.lat);
-            const airportLon = toNumber(airport.lon);
+      const stations = await metarAirportRes.value.json();
+      type MetarStation = { icaoId: string; name?: string; lat?: unknown; lon?: unknown; temp?: unknown; wspd?: unknown; wdir?: unknown; visib?: unknown };
+      const nearestStation = Array.isArray(stations)
+        ? stations
+          .filter((s: MetarStation) => {
+            const sLat = toNumber(s?.lat);
+            const sLon = toNumber(s?.lon);
+            return typeof s?.icaoId === "string" && sLat != null && sLon != null;
+          })
+          .reduce((closest: MetarStation | null, station: MetarStation) => {
+            if (!closest) return station;
+            const stationLat = toNumber(station.lat);
+            const stationLon = toNumber(station.lon);
             const closestLat = toNumber(closest.lat);
             const closestLon = toNumber(closest.lon);
-            if (airportLat == null || airportLon == null || closestLat == null || closestLon == null) return closest;
-            return haversineKm(lat, lon, airportLat, airportLon) < haversineKm(lat, lon, closestLat, closestLon)
-              ? airport
+            if (stationLat == null || stationLon == null || closestLat == null || closestLon == null) return closest;
+            return haversineKm(lat, lon, stationLat, stationLon) < haversineKm(lat, lon, closestLat, closestLon)
+              ? station
               : closest;
           }, null)
         : null;
-      const nearestAirportLat = toNumber(nearestAirport?.lat);
-      const nearestAirportLon = toNumber(nearestAirport?.lon);
-      const nearestAirportDistanceKm = nearestAirportLat != null && nearestAirportLon != null
-        ? haversineKm(lat, lon, nearestAirportLat, nearestAirportLon)
-        : null;
-      const icao = nearestAirport?.icaoId;
-      if (typeof icao === "string" && icao.length > 0) {
-        const metarRes = await fetch(
-          `https://aviationweather.gov/api/data/metar?ids=${icao}&format=json`,
-          { headers: { "User-Agent": USER_AGENT } }
-        );
-        if (metarRes.ok) {
-          metarConnected = true;
-          const metarData = await metarRes.json();
-          const m = metarData?.[0];
-          if (m && m.temp != null) {
-            const temp = toNumber(m.temp);
-            const windSpeed = toNumber(m.wspd);
-            const windDir = toNumber(m.wdir);
-            const visibility = toNumber(m.visib);
-            if (temp != null) {
-              metar = {
-                icaoId: m.icaoId,
-                name: m.name ?? nearestAirport?.name ?? m.icaoId,
-                temp,
-                wind_speed: windSpeed ?? 0,
-                wind_dir: windDir ?? 0,
-                visibility: visibility ?? 10,
-                lat: nearestAirportLat ?? undefined,
-                lon: nearestAirportLon ?? undefined,
-                distance_km: nearestAirportDistanceKm ?? undefined,
-              };
-            }
-          }
+      if (nearestStation) {
+        const stationLat = toNumber(nearestStation.lat);
+        const stationLon = toNumber(nearestStation.lon);
+        const distanceKm = stationLat != null && stationLon != null
+          ? haversineKm(lat, lon, stationLat, stationLon)
+          : null;
+        const temp = toNumber(nearestStation.temp);
+        if (temp != null) {
+          metar = {
+            icaoId: nearestStation.icaoId,
+            name: nearestStation.name ?? nearestStation.icaoId,
+            temp,
+            wind_speed: toNumber(nearestStation.wspd) ?? 0,
+            wind_dir: toNumber(nearestStation.wdir) ?? 0,
+            visibility: toNumber(nearestStation.visib) ?? 10,
+            lat: stationLat ?? undefined,
+            lon: stationLon ?? undefined,
+            distance_km: distanceKm ?? undefined,
+          };
         }
       }
     } catch { /* inland / no station */ }
