@@ -53,6 +53,8 @@ const DISMISSED_ALERTS_STORAGE_KEY = "weather-dismissed-alerts";
 
 const PULL_THRESHOLD = 72;
 const MAX_PULL = PULL_THRESHOLD + 24;
+const PULL_INDICATOR_HIDDEN_OFFSET = 56;
+const PULL_INDICATOR_VISIBLE_OFFSET = 24;
 
 type AdviceExtras = {
   aqi?: number;
@@ -807,13 +809,18 @@ export default function Home() {
   }, [scrollSettingsIntoView]);
 
   const pullRatio = Math.min(pullDistance / PULL_THRESHOLD, 1);
+  const pullIndicatorOffset = Math.min(
+    Math.max(pullDistance - PULL_INDICATOR_HIDDEN_OFFSET, -PULL_INDICATOR_HIDDEN_OFFSET),
+    PULL_INDICATOR_VISIBLE_OFFSET
+  );
 
   return (
     <main
-      className="mx-auto flex w-full min-h-screen max-w-7xl flex-col gap-8 px-4 pt-8 pb-8 text-[var(--text-primary)] md:px-8"
+      className="mx-auto flex w-full min-h-screen max-w-7xl flex-col gap-8 px-4 pt-0 pb-8 text-[var(--text-primary)] md:px-8"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 2rem)" }}
     >
 
       {/* Pull-to-refresh indicator */}
@@ -823,15 +830,15 @@ export default function Home() {
         style={
           isRefreshing
             ? {
-                top: -40,
+                top: "calc(env(safe-area-inset-top, 0px) + 8px)",
                 opacity: 1,
                 animation: "pull-refresh-pop 0.3s ease-out forwards",
                 transition: "none",
               }
             : {
-                top: -40,
+                top: "calc(env(safe-area-inset-top, 0px) + 8px)",
                 opacity: pullDistance > 0 ? pullRatio : 0,
-                transform: `translateX(-50%) translateY(${pullDistance > 0 ? pullDistance : 0}px)`,
+                transform: `translateX(-50%) translateY(${pullDistance > 0 ? pullIndicatorOffset : -PULL_INDICATOR_HIDDEN_OFFSET}px)`,
                 transition: "opacity 150ms, transform 150ms",
               }
         }

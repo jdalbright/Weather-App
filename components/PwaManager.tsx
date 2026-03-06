@@ -14,6 +14,8 @@ export default function PwaManager() {
   const [showIosBanner, setShowIosBanner] = useState(false);
 
   useEffect(() => {
+    let frameId = 0;
+
     // Detect standalone mode (already installed)
     const isStandalone =
       window.matchMedia('(display-mode: standalone)').matches ||
@@ -27,13 +29,20 @@ export default function PwaManager() {
       !(window as unknown as { MSStream?: unknown }).MSStream;
 
     if (isIos) {
+      let shouldShowIosBanner = false;
       try {
         const dismissed = localStorage.getItem(
           'weather-ios-install-dismissed'
         );
-        if (!dismissed) setShowIosBanner(true);
+        shouldShowIosBanner = !dismissed;
       } catch {
-        setShowIosBanner(true);
+        shouldShowIosBanner = true;
+      }
+
+      if (shouldShowIosBanner) {
+        frameId = window.requestAnimationFrame(() => {
+          setShowIosBanner(true);
+        });
       }
     }
 
@@ -52,11 +61,13 @@ export default function PwaManager() {
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    return () =>
+    return () => {
+      window.cancelAnimationFrame(frameId);
       window.removeEventListener(
         'beforeinstallprompt',
         handleBeforeInstallPrompt
       );
+    };
   }, []);
 
   const handleInstall = async () => {
