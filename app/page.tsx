@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import WeatherCard from "@/components/WeatherCard";
 import SearchBar from "@/components/SearchBar";
 import CollapsiblePanel from "@/components/CollapsiblePanel";
+import VoiceSettingsMenu from "@/components/VoiceSettingsMenu";
 import {
   getThemeFromCode,
   getWeatherData,
@@ -29,26 +30,7 @@ import {
   type MetarData,
   type RainSummary,
 } from "@/lib/weather";
-import {
-  CloudSun,
-  Flame,
-  FlaskConical,
-  HandHeart,
-  Heart,
-  Info,
-  Loader2,
-  Monitor,
-  Minus,
-  MoonStar,
-  Search,
-  Settings,
-  ShieldAlert,
-  Sparkles,
-  SunMedium,
-  Trees,
-  X,
-  Zap,
-} from "lucide-react";
+import { Info, Loader2, Monitor, MoonStar, Settings, SunMedium, X } from "lucide-react";
 import {
   DEFAULT_PERSONALITY,
   getAllPersonalities,
@@ -149,21 +131,6 @@ function buildAdviceExtras(
   };
 }
 
-const PERSONALITY_ICONS = {
-  flame: Flame,
-  minus: Minus,
-  sparkles: Sparkles,
-  moon: MoonStar,
-  cloud: CloudSun,
-  zap: Zap,
-  heart: Heart,
-  "hand-heart": HandHeart,
-  search: Search,
-  trees: Trees,
-  "shield-alert": ShieldAlert,
-  "flask-conical": FlaskConical,
-} as const;
-
 export default function Home() {
   type WeatherResponse = NonNullable<Awaited<ReturnType<typeof getWeatherData>>>;
 
@@ -203,6 +170,7 @@ export default function Home() {
   const locationRequestIdRef = useRef(0);
   const personalityRef = useRef(personality);
   const customPersonalitiesRef = useRef<CustomPersonality[]>([]);
+  const settingsAnchorRef = useRef<HTMLDivElement | null>(null);
   const [settings, setSettings] = useState<{ tempUnit: "celsius" | "fahrenheit"; distUnit: "kmh" | "mph" }>({
     tempUnit: "fahrenheit",
     distUnit: "mph",
@@ -627,30 +595,27 @@ export default function Home() {
     },
   ];
 
-  const renderPersonalityIcon = (personalityOption: Personality, active: boolean) => {
-    const Icon = PERSONALITY_ICONS[personalityOption.icon];
-    return (
-      <div
-        className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition-colors ${active
-          ? "bg-[var(--accent-soft)] border-[color:var(--accent-border)] text-[var(--accent-text)]"
-          : "surface-chip-muted text-[var(--text-secondary)]"
-          }`}
-      >
-        <Icon size={18} />
-      </div>
-    );
-  };
-
   const applyAppearanceChange = (nextAppearance: Appearance) => {
     if (nextAppearance === appearance) return;
     setAppearance(nextAppearance);
   };
 
+  const scrollSettingsIntoView = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      settingsAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
+  const openAllSettings = useCallback(() => {
+    setIsSettingsOpen(true);
+    scrollSettingsIntoView();
+  }, [scrollSettingsIntoView]);
+
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col items-center gap-8 px-4 pt-8 pb-8 text-[var(--text-primary)] md:px-8">
 
       {/* Top Search, Units & Personality Settings */}
-      <div className="mx-auto flex w-full max-w-lg flex-col gap-8">
+      <div ref={settingsAnchorRef} className="mx-auto flex w-full max-w-lg flex-col gap-8">
 
         <div className="flex gap-2 relative z-50">
           <div className="flex-1 relative">
@@ -658,7 +623,14 @@ export default function Home() {
           </div>
 
           <button
-            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+            onClick={() => {
+              if (isSettingsOpen) {
+                setIsSettingsOpen(false);
+                return;
+              }
+
+              openAllSettings();
+            }}
             className={`surface-card-strong flex h-14 min-w-[60px] items-center justify-center rounded-[24px] px-4 border transition-all ${isSettingsOpen
               ? "border-[color:var(--accent-border)] text-[var(--accent-text)]"
               : "text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]"
@@ -677,49 +649,49 @@ export default function Home() {
                 <p className="theme-muted text-xs">Everything in one place, with fewer taps.</p>
               </div>
               <span className="surface-chip rounded-full px-3 py-1 text-[11px] font-bold shadow-sm">
-                {appearanceLabel} mode
+                {`${appearanceLabel} mode`}
               </span>
             </div>
 
             <div className="flex flex-col gap-5">
               <div>
-                <div className="mb-3 flex items-center justify-between px-2">
-                  <div>
-                    <h3 className="theme-section-label text-sm font-bold">Appearance</h3>
-                    <p className="theme-muted text-xs">Pick the app look or follow your device.</p>
-                  </div>
-                  <span className="surface-chip rounded-full px-3 py-1 text-xs font-bold shadow-sm">
-                    {appearanceLabel}
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {appearanceOptions.map((option) => {
-                    const Icon = option.Icon;
-                    const isActive = appearance === option.id;
+                    <div className="mb-3 flex items-center justify-between px-2">
+                      <div>
+                        <h3 className="theme-section-label text-sm font-bold">Appearance</h3>
+                        <p className="theme-muted text-xs">Pick the app look or follow your device.</p>
+                      </div>
+                      <span className="surface-chip rounded-full px-3 py-1 text-xs font-bold shadow-sm">
+                        {appearanceLabel}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {appearanceOptions.map((option) => {
+                        const Icon = option.Icon;
+                        const isActive = appearance === option.id;
 
-                    return (
-                      <button
-                        key={option.id}
-                        onClick={() => applyAppearanceChange(option.id)}
-                        aria-pressed={isActive}
-                        className={`rounded-[20px] border p-3 text-center transition-all ${isActive
-                          ? "bg-[var(--surface-elevated)] border-[color:var(--accent-border)] shadow-md"
-                          : "surface-tile hover:bg-[var(--surface-card-strong)] hover:border-[color:var(--border-strong)]"
-                          }`}
-                      >
-                        <div className="flex flex-col items-center gap-2">
-                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${option.badgeClass}`}>
-                            <Icon size={18} className={option.iconClass} />
-                          </span>
-                          <span className="theme-heading text-xs font-bold">{option.label}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="theme-muted mt-3 px-2 text-xs">
-                  {appearanceOptions.find((option) => option.id === appearance)?.description}
-                </p>
+                        return (
+                          <button
+                            key={option.id}
+                            onClick={() => applyAppearanceChange(option.id)}
+                            aria-pressed={isActive}
+                            className={`rounded-[20px] border p-3 text-center transition-all ${isActive
+                              ? "bg-[var(--surface-elevated)] border-[color:var(--accent-border)] shadow-md"
+                              : "surface-tile hover:bg-[var(--surface-card-strong)] hover:border-[color:var(--border-strong)]"
+                              }`}
+                          >
+                            <div className="flex flex-col items-center gap-2">
+                              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${option.badgeClass}`}>
+                                <Icon size={18} className={option.iconClass} />
+                              </span>
+                              <span className="theme-heading text-xs font-bold">{option.label}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="theme-muted mt-3 px-2 text-xs">
+                      {appearanceOptions.find((option) => option.id === appearance)?.description}
+                    </p>
               </div>
 
               <div>
@@ -774,161 +746,46 @@ export default function Home() {
                 </div>
               </div>
 
+              <VoiceSettingsMenu
+                allPersonalities={allPersonalities}
+                personalityId={personality}
+                selectedPersonality={selectedPersonality}
+                customPersonalitiesCount={customPersonalities.length}
+                customIdea={customIdea}
+                customPersonalityError={customPersonalityError}
+                isGeneratingCustomPersonality={isGeneratingCustomPersonality}
+                onCustomIdeaChange={(value) => {
+                  setCustomIdea(value);
+                  if (customPersonalityError) {
+                    setCustomPersonalityError(null);
+                  }
+                }}
+                onPersonalityChange={handlePersonalityChange}
+                onDeleteCustomPersonality={handleDeleteCustomPersonality}
+                onGenerateCustomPersonality={() => void handleGenerateCustomPersonality()}
+              />
+
               <div>
-                <div className="mb-3 flex items-center justify-between px-2">
-                  <div>
-                    <h3 className="theme-section-label text-sm font-bold">Forecast Voice</h3>
-                    <p className="theme-muted text-xs">Choose the voice, then preview it below.</p>
-                  </div>
-                  <span className="surface-chip rounded-full px-3 py-1 text-xs font-bold shadow-sm">
-                    {selectedPersonality.label}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-                  {allPersonalities.map((option) => {
-                    const isActive = option.id === personality;
-                    const Icon = PERSONALITY_ICONS[option.icon];
-
-                    return (
-                      <div
-                        key={option.id}
-                        className={`rounded-[20px] border transition-all ${isActive
-                          ? "bg-[var(--surface-elevated)] border-[color:var(--accent-border)] shadow-md"
-                          : "surface-tile hover:bg-[var(--surface-card-strong)] hover:border-[color:var(--border-strong)]"
-                          }`}
-                      >
-                        <button
-                          onClick={() => handlePersonalityChange(option.id)}
-                          aria-pressed={isActive}
-                          className="w-full min-h-[88px] px-3 py-3 text-left"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border transition-colors ${isActive
-                                ? "bg-[var(--accent-soft)] border-[color:var(--accent-border)] text-[var(--accent-text)]"
-                                : "surface-chip-muted text-[var(--text-secondary)]"
-                                }`}
-                            >
-                              <Icon size={16} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <p className="theme-heading truncate text-sm font-bold">{option.label}</p>
-                                {option.isCustom ? (
-                                  <span className="rounded-full bg-[var(--surface-chip)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">
-                                    Custom
-                                  </span>
-                                ) : null}
-                              </div>
-                              <p className="theme-subtle mt-0.5 text-[11px]">{option.description}</p>
-                            </div>
-                          </div>
-                        </button>
-                        {option.isCustom ? (
-                          <div className="px-3 pb-3">
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteCustomPersonality(option.id)}
-                              className="theme-subtle min-h-[44px] rounded-full px-3 py-2 text-[11px] font-bold transition-colors hover:bg-[var(--surface-chip)] hover:text-[var(--text-primary)]"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="surface-tile mt-3 rounded-[24px] p-4">
-                  <div className="flex items-start gap-3">
-                    {renderPersonalityIcon(selectedPersonality, true)}
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="theme-heading text-sm font-bold">{selectedPersonality.label}</span>
-                        <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--accent-text)]">
-                          Active
-                        </span>
-                        {selectedPersonality.isCustom ? (
-                          <span className="rounded-full bg-[var(--surface-chip)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">
-                            Custom
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="theme-muted mt-1 text-sm font-medium">{selectedPersonality.description}</p>
-                      <p className="theme-subtle mt-2 text-xs">{selectedPersonality.preview}</p>
+                  <button
+                    type="button"
+                    onClick={() => setIsAboutOpen(!isAboutOpen)}
+                    className="mb-3 flex w-full items-center justify-between gap-2 px-2 text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Info size={14} className="text-[var(--text-muted)]" />
+                      <h3 className="theme-section-label text-sm font-bold">About</h3>
                     </div>
-                  </div>
-                </div>
+                    <span className={`theme-muted text-xs transition-transform duration-200 ${isAboutOpen ? "rotate-180" : ""}`}>▾</span>
+                  </button>
 
-                <div className="surface-tile mt-3 rounded-[24px] p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <h4 className="theme-heading text-sm font-bold">Build Your Own</h4>
-                      <p className="theme-muted text-xs">Describe a vibe and the AI will turn it into a reusable forecast voice.</p>
-                    </div>
-                    <span className="surface-chip rounded-full px-3 py-1 text-[11px] font-bold shadow-sm">
-                      {customPersonalities.length}/12
-                    </span>
-                  </div>
+                  <CollapsiblePanel open={isAboutOpen}>
+                    <div className="surface-tile rounded-[24px] p-4">
+                      <p className="theme-heading text-sm font-bold">Weather App</p>
+                      <p className="theme-muted mt-0.5 text-xs">
+                        Personality-driven forecasts powered by multiple open data sources and AI.
+                      </p>
 
-                  <textarea
-                    value={customIdea}
-                    onChange={(event) => {
-                      setCustomIdea(event.target.value);
-                      if (customPersonalityError) {
-                        setCustomPersonalityError(null);
-                      }
-                    }}
-                    placeholder="Try: calm airline captain, overcaffeinated soccer dad, elegant spa concierge..."
-                    className="organic-input min-h-[104px] w-full rounded-[20px] border px-4 py-3 text-sm font-medium outline-none transition-all focus:border-[color:var(--border-strong)] focus:bg-[var(--surface-elevated)]"
-                  />
-
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <p className="theme-subtle text-xs">Generated voices are saved locally on this device and show up beside the built-ins.</p>
-                    <button
-                      type="button"
-                      onClick={() => void handleGenerateCustomPersonality()}
-                      disabled={isGeneratingCustomPersonality || customIdea.trim().length === 0}
-                      className={`organic-button rounded-full px-4 py-2 text-sm ${isGeneratingCustomPersonality || customIdea.trim().length === 0
-                        ? "cursor-not-allowed opacity-60"
-                        : ""
-                        }`}
-                    >
-                      {isGeneratingCustomPersonality ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                      {isGeneratingCustomPersonality ? "Creating..." : "Create Voice"}
-                    </button>
-                  </div>
-
-                  {customPersonalityError ? (
-                    <p className="mt-3 text-xs font-semibold text-rose-500">{customPersonalityError}</p>
-                  ) : null}
-                </div>
-              </div>
-
-              {/* About Section */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setIsAboutOpen(!isAboutOpen)}
-                  className="mb-3 flex w-full items-center justify-between gap-2 px-2 text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <Info size={14} className="text-[var(--text-muted)]" />
-                    <h3 className="theme-section-label text-sm font-bold">About</h3>
-                  </div>
-                  <span className={`theme-muted text-xs transition-transform duration-200 ${isAboutOpen ? "rotate-180" : ""}`}>▾</span>
-                </button>
-
-                <CollapsiblePanel open={isAboutOpen}>
-                  <div className="surface-tile rounded-[24px] p-4">
-                    <p className="theme-heading text-sm font-bold">Weather App</p>
-                    <p className="theme-muted mt-0.5 text-xs">
-                      Personality-driven forecasts powered by multiple open data sources and AI.
-                    </p>
-
-                    <div className="mt-4 flex flex-col gap-3">
+                      <div className="mt-4 flex flex-col gap-3">
 
                       {/* Always-on data sources */}
                       <div>
@@ -1007,9 +864,9 @@ export default function Home() {
                         </div>
                       </div>
 
+                      </div>
                     </div>
-                  </div>
-                </CollapsiblePanel>
+                  </CollapsiblePanel>
               </div>
 
             </div>
@@ -1041,8 +898,22 @@ export default function Home() {
           isDetailed={isDetailed}
           onToggleDetail={() => setIsDetailed(!isDetailed)}
           aiAdvice={aiAdvice}
+          allPersonalities={allPersonalities}
+          personalityId={personality}
           selectedPersonality={selectedPersonality}
-          onOpenSettings={() => setIsSettingsOpen(true)}
+          customPersonalitiesCount={customPersonalities.length}
+          customIdea={customIdea}
+          customPersonalityError={customPersonalityError}
+          isGeneratingCustomPersonality={isGeneratingCustomPersonality}
+          onCustomIdeaChange={(value) => {
+            setCustomIdea(value);
+            if (customPersonalityError) {
+              setCustomPersonalityError(null);
+            }
+          }}
+          onPersonalityChange={handlePersonalityChange}
+          onDeleteCustomPersonality={handleDeleteCustomPersonality}
+          onGenerateCustomPersonality={() => void handleGenerateCustomPersonality()}
           distUnit={settings.distUnit}
           airQuality={airQuality}
           marine={marine}

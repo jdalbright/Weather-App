@@ -26,6 +26,7 @@ import {
 } from "@/lib/weather";
 import { format } from "date-fns";
 import CollapsiblePanel from "@/components/CollapsiblePanel";
+import VoiceSettingsMenu from "@/components/VoiceSettingsMenu";
 import {
     Thermometer,
     Wind,
@@ -104,20 +105,8 @@ const insightGridClass = "mt-3 grid w-full max-w-[26rem] grid-cols-2 gap-2";
 const insightPillClass = "flex min-h-[76px] w-full min-w-0 items-center justify-between gap-3 rounded-[24px] border border-[color:var(--border-soft)] bg-[var(--surface-chip)] text-[var(--text-secondary)] px-4 py-3.5 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover:border-[color:var(--border-strong)] hover:shadow-[var(--shadow-soft)]";
 const insightPillOpenClass = "border-[color:var(--accent-border)] bg-[var(--surface-elevated)] shadow-[var(--shadow-soft)]";
 const sectionAccordionButtonClass = "surface-tile flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[24px] px-4 py-3 text-left transition-all hover:border-[color:var(--border-strong)] hover:bg-[var(--surface-elevated)]";
-const MIN_FORECAST_CHANCE_TO_SHOW = 15;
-
 type DetailSectionId = "forecast" | "conditions" | "extras";
 type SourceSectionId = "hero" | "alerts" | "conditions" | "forecast" | "extras";
-
-function shouldShowForecastChance(probability: number | null | undefined): probability is number {
-    return probability != null && probability >= MIN_FORECAST_CHANCE_TO_SHOW;
-}
-
-function formatCurrentPrecipChance(probability: number): string {
-    if (probability < MIN_FORECAST_CHANCE_TO_SHOW) return "Low";
-    if (probability >= 70) return `${probability}%`;
-    return `${probability}%`;
-}
 
 type WeatherCardProps = {
     locationName: string,
@@ -125,8 +114,17 @@ type WeatherCardProps = {
     isDetailed: boolean,
     onToggleDetail: () => void,
     aiAdvice: string,
+    allPersonalities: Personality[],
+    personalityId: string,
     selectedPersonality: Personality,
-    onOpenSettings: () => void,
+    customPersonalitiesCount: number,
+    customIdea: string,
+    customPersonalityError: string | null,
+    isGeneratingCustomPersonality: boolean,
+    onCustomIdeaChange: (value: string) => void,
+    onPersonalityChange: (id: string) => void,
+    onDeleteCustomPersonality: (id: string) => void,
+    onGenerateCustomPersonality: () => void | Promise<void>,
     distUnit?: "kmh" | "mph",
     airQuality?: AirQualityData | null,
     marine?: MarineData | null,
@@ -150,8 +148,17 @@ export default function WeatherCard({
     isDetailed,
     onToggleDetail,
     aiAdvice,
+    allPersonalities,
+    personalityId,
     selectedPersonality,
-    onOpenSettings,
+    customPersonalitiesCount,
+    customIdea,
+    customPersonalityError,
+    isGeneratingCustomPersonality,
+    onCustomIdeaChange,
+    onPersonalityChange,
+    onDeleteCustomPersonality,
+    onGenerateCustomPersonality,
     distUnit = "mph",
     airQuality,
     marine,
@@ -163,14 +170,13 @@ export default function WeatherCard({
     forecastConfidence,
     climateNormal,
     metar,
-    metarConnected,
     rainSummary,
     pirateWeatherConnected,
-    nwsConnected,
 }: WeatherCardProps) {
     const [showConfidenceDetail, setShowConfidenceDetail] = useState(false);
     const [showStationDetail, setShowStationDetail] = useState(false);
     const [showMinutelyDetail, setShowMinutelyDetail] = useState(false);
+    const [isVoiceMenuOpen, setIsVoiceMenuOpen] = useState(false);
     const [expandedAlertIndex, setExpandedAlertIndex] = useState<number | null>(null);
     const [openDetailSections, setOpenDetailSections] = useState<Record<DetailSectionId, boolean>>({
         forecast: false,
@@ -199,6 +205,11 @@ export default function WeatherCard({
     const currentCondition = getWeatherDescriptionFromCode(current.weather_code);
     const localTimestamp = getLocalTimeForOffset(weatherData.utc_offset_seconds);
     const localTimeLabel = format(localTimestamp, "h:mm a");
+    const resolvedAdvice = (aiAdvice || "Looking out the window...").trim();
+    const handleVoiceSelection = (nextPersonalityId: string) => {
+        onPersonalityChange(nextPersonalityId);
+        setIsVoiceMenuOpen(false);
+    };
 
     // Alerts (deduplicated by event name)
     const allAlerts = [
@@ -282,8 +293,6 @@ export default function WeatherCard({
         ? "Watch the darker bars for strongest precip"
         : "Flat bars mean no meaningful precip signal";
     const maxMinutelyIntensity = minutelyTimeline.reduce((max, point) => Math.max(max, point.precip_intensity), 0);
-    const peakMinutelyChance = Math.round(Math.max(...minutelyTimeline.map((point) => point.precip_probability), 0) * 100);
-    const currentPrecipChanceLabel = formatCurrentPrecipChance(current.precipitation_probability);
     const hasConfidencePill = Boolean(conf && forecastConfidence);
     const hasStationPill = metarTempDisplay != null;
     const hasMinutelyPill = Boolean(showMinutelyBanner && rainSummary);
@@ -389,7 +398,7 @@ export default function WeatherCard({
     };
 
     return (
-        <div className="organic-card flex flex-col gap-6 w-full max-w-lg mx-auto overflow-hidden transition-all duration-500">
+        <div className="weather-card-shell flex flex-col gap-6 w-full max-w-lg mx-auto overflow-hidden transition-all duration-500">
 
             {/* Alerts banner */}
             {allAlerts.length > 0 && (
@@ -655,15 +664,9 @@ export default function WeatherCard({
                                         </div>
                                     </div>
                                     <div className="mt-3 flex flex-wrap gap-2">
-                                        {shouldShowForecastChance(peakMinutelyChance) ? (
-                                            <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
-                                                Peak chance {peakMinutelyChance}%
-                                            </span>
-                                        ) : (
-                                            <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
-                                                Weak signal
-                                            </span>
-                                        )}
+                                        <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
+                                            Peak chance {Math.round(Math.max(...minutelyTimeline.map((point) => point.precip_probability), 0) * 100)}%
+                                        </span>
                                         <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
                                             {minutelyGuidanceText}
                                         </span>
@@ -676,45 +679,84 @@ export default function WeatherCard({
             </div>
 
             {/* Personality + AI advice */}
-            <div className="surface-card-strong overflow-hidden rounded-[30px]">
-                <div className="border-b theme-divider bg-[linear-gradient(135deg,rgba(255,255,255,0.08),transparent_75%)] px-5 py-5">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex min-w-0 items-start gap-3">
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm">
-                                <PersonalityIcon size={20} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <p className="theme-section-label text-[11px] font-bold tracking-[0.22em]">Forecast Voice</p>
-                                <h2 className="theme-heading mt-1 text-[clamp(2rem,8vw,2.6rem)] font-bold leading-[0.95] sm:text-[2.2rem]">
-                                    {selectedPersonality.label}
-                                </h2>
-                                <div className="mt-3 flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                                    <span className="surface-chip max-w-full rounded-full px-2.5 py-1 text-[11px] font-bold leading-snug">
-                                        {selectedPersonality.preview}
-                                    </span>
-                                    <span className="theme-muted max-w-[34ch] text-sm leading-relaxed">
+            <div className="surface-card-strong overflow-hidden rounded-[28px] bg-[radial-gradient(circle_at_top_left,rgba(125,211,252,0.12),transparent_38%),linear-gradient(160deg,rgba(255,255,255,0.06),transparent_62%)]">
+                <div className="px-4 py-4 sm:px-5 sm:py-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 flex-col items-center gap-2.5 text-center sm:flex-row sm:items-start sm:text-left">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm sm:h-11 sm:w-11">
+                                    <PersonalityIcon size={18} />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                                        <p className="theme-section-label text-[11px] font-bold tracking-[0.22em]">Forecast Voice</p>
+                                        <span className="rounded-full border border-[color:var(--accent-border)] bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--accent-text)]">
+                                            Active
+                                        </span>
+                                        {selectedPersonality.isCustom ? (
+                                            <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
+                                                Custom
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                    <h2 className="theme-heading mt-2 text-[clamp(1.7rem,9vw,2.45rem)] font-bold leading-none">
+                                        {selectedPersonality.label}
+                                    </h2>
+                                    <p className="theme-subtle mx-auto mt-2 max-w-[30ch] text-[13px] leading-relaxed opacity-90 sm:mx-0 sm:text-sm">
                                         {selectedPersonality.description}
-                                    </span>
+                                    </p>
                                 </div>
                             </div>
                         </div>
 
-                        <button
-                            onClick={onOpenSettings}
-                            className="surface-chip inline-flex min-h-[44px] shrink-0 self-start items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition-all hover:border-[color:var(--accent-border)] hover:text-[var(--accent-text)] sm:self-auto"
-                        >
-                            Change
-                            <ChevronDown className="-rotate-90" size={14} />
-                        </button>
+                        <div className="flex justify-center sm:block">
+                            <button
+                                type="button"
+                                onClick={() => setIsVoiceMenuOpen((currentValue) => !currentValue)}
+                                className="surface-chip inline-flex min-h-[42px] shrink-0 items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition-all hover:border-[color:var(--accent-border)] hover:text-[var(--accent-text)]"
+                                aria-expanded={isVoiceMenuOpen}
+                            >
+                                Change voice
+                                <ChevronDown className={`transition-transform ${isVoiceMenuOpen ? "rotate-180" : "-rotate-90"}`} size={14} />
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                <div className="px-5 py-5">
-                    <div className="surface-tile-strong rounded-[24px] px-4 py-4">
-                        <p className="theme-subtle text-[11px] font-bold uppercase tracking-[0.22em]">Current Read</p>
-                        <p className="theme-heading mt-3 text-lg font-medium leading-relaxed sm:text-xl">
-                            {aiAdvice || "Looking out the window..."}
-                        </p>
+                    <CollapsiblePanel open={isVoiceMenuOpen} className="mt-4">
+                        <div className="surface-tile rounded-[26px] p-4 sm:p-5">
+                            <VoiceSettingsMenu
+                                allPersonalities={allPersonalities}
+                                personalityId={personalityId}
+                                selectedPersonality={selectedPersonality}
+                                customPersonalitiesCount={customPersonalitiesCount}
+                                customIdea={customIdea}
+                                customPersonalityError={customPersonalityError}
+                                isGeneratingCustomPersonality={isGeneratingCustomPersonality}
+                                onCustomIdeaChange={onCustomIdeaChange}
+                                onPersonalityChange={handleVoiceSelection}
+                                onDeleteCustomPersonality={onDeleteCustomPersonality}
+                                onGenerateCustomPersonality={onGenerateCustomPersonality}
+                                showSelectedSummary={false}
+                            />
+                        </div>
+                    </CollapsiblePanel>
+
+                    <div className="mt-4 flex justify-center sm:justify-start">
+                        <div className="surface-chip max-w-fit rounded-full px-4 py-2 text-center sm:text-left">
+                            <p className="theme-subtle text-[10px] font-bold uppercase tracking-[0.18em]">Preview</p>
+                            <p className="theme-heading mt-1 text-sm font-medium italic leading-relaxed">
+                                &ldquo;{selectedPersonality.preview}&rdquo;
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="theme-divider mt-5 border-t pt-5">
+                        <div className="surface-tile-strong mx-auto flex max-w-[38rem] flex-col items-center rounded-[26px] px-5 py-5 text-center sm:px-6 sm:py-6">
+                            <p className="theme-subtle text-[11px] font-bold uppercase tracking-[0.22em]">Current Read</p>
+                            <p className="theme-heading mt-3 max-w-[32ch] text-center text-[1.08rem] font-medium leading-[1.72] tracking-[-0.01em] sm:max-w-[34ch] sm:text-[1.12rem]">
+                                {resolvedAdvice}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -769,7 +811,7 @@ export default function WeatherCard({
                                         <Droplets className="text-blue-500" size={20} />
                                         <div className="flex flex-col">
                                             <span className="theme-section-label text-xs font-bold">Precip Chance</span>
-                                            <span className={statValueClass}>{currentPrecipChanceLabel}</span>
+                                            <span className={statValueClass}>{current.precipitation_probability}%</span>
                                         </div>
                                     </div>
                                     <div className={statTileClass}>
@@ -996,7 +1038,7 @@ export default function WeatherCard({
                                                                 />
                                                                 <div className="flex flex-col items-center">
                                                                     <span className="font-bold">{event.temp}&deg;</span>
-                                                                    {shouldShowForecastChance(event.pop) && (
+                                                                    {(event.pop ?? 0) > 0 && (
                                                                         <span className="text-[10px] font-bold text-blue-500">{event.pop}%</span>
                                                                     )}
                                                                 </div>
@@ -1044,7 +1086,7 @@ export default function WeatherCard({
                                                 const dayPrecipProbability = weatherData.daily.precipitation_probability_max?.[index] ?? 0;
                                                 const dayRainTotal = (weatherData.daily.rain_sum?.[index] ?? 0) + (weatherData.daily.showers_sum?.[index] ?? 0);
                                                 const daySnowfallTotal = weatherData.daily.snowfall_sum?.[index] ?? 0;
-                                                const showRainChance = shouldShowForecastChance(dayPrecipProbability)
+                                                const showRainChance = dayPrecipProbability > 0
                                                     && dayRainTotal > 0
                                                     && daySnowfallTotal === 0
                                                     && isLiquidPrecipitationCode(dayCode);
