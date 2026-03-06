@@ -36,7 +36,7 @@ export async function POST(req: Request) {
             // We use Gemini Flash 3.1 Lite per your request!
             model: gatewayProvider('gemini-3.1-flash-lite-preview'),
             system: systemPrompt,
-            prompt: `Current Weather: ${weather.temp} degrees, Weather Code: ${weather.condition}. Is Day: ${weather.isDay}. Give short advice.`,
+            prompt: `Current Weather: ${weather.temp}°${weather.unit || 'F'}, Weather Code: ${weather.condition}. Is Day: ${weather.isDay}. Give short advice.`,
         });
 
         return Response.json({ text });

@@ -1,7 +1,8 @@
-export async function getWeatherData(lat: number, lon: number) {
+export async function getWeatherData(lat: number, lon: number, unit: "celsius" | "fahrenheit" = "celsius") {
   try {
+    const unitParam = unit === "fahrenheit" ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : "";
     const res = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto`
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max&timezone=auto${unitParam}`
     );
 
     if (!res.ok) {
@@ -16,18 +17,23 @@ export async function getWeatherData(lat: number, lon: number) {
   }
 }
 
-export async function geocodeLocation(query: string) {
+export interface GeocodeResult {
+  lat: number;
+  lon: number;
+  name: string;
+}
+
+export async function geocodeLocation(query: string, count: number = 1): Promise<GeocodeResult[] | null> {
   try {
-    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`);
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=${count}&language=en&format=json`);
     if (!res.ok) throw new Error("Failed to geocode");
     const data = await res.json();
     if (data.results && data.results.length > 0) {
-      const result = data.results[0];
-      return {
+      return data.results.map((result: any) => ({
         lat: result.latitude,
         lon: result.longitude,
         name: `${result.name}${result.admin1 ? `, ${result.admin1}` : ''}${result.country ? `, ${result.country}` : ''}`
-      };
+      }));
     }
     return null;
   } catch (error) {

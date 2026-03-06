@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import WeatherCard from "@/components/WeatherCard";
+import SearchBar from "@/components/SearchBar";
 import { getThemeFromCode, getWeatherData, geocodeLocation } from "@/lib/weather";
-import { Search, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 const PERSONALITIES = [
   { id: "snarky", label: "Snarky" },
@@ -18,7 +19,6 @@ export default function Home() {
   const [isDetailed, setIsDetailed] = useState(false);
   const [personality, setPersonality] = useState("snarky");
   const [aiAdvice, setAiAdvice] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
   const [theme, setTheme] = useState("theme-sun");
   const [locationName, setLocationName] = useState("New York");
   const [unit, setUnit] = useState<"celsius" | "fahrenheit">("fahrenheit"); // Default to F for US demo
@@ -105,24 +105,10 @@ export default function Home() {
     }
   };
 
-  // Real geo-search via Open-Meteo
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-
-    setLoading(true);
-    setWeather(null); // Clear to show loading state
-
-    const result = await geocodeLocation(searchQuery);
-
-    if (result) {
-      setLocationName(result.name);
-      await fetchWeatherForLocation(result.lat, result.lon);
-    } else {
-      alert("Location not found. Try another city.");
-      setLoading(false);
-    }
-    setSearchQuery("");
+  // Handle location selection from search
+  const handleLocationSelect = async (lat: number, lon: number, name: string) => {
+    setLocationName(name);
+    await fetchWeatherForLocation(lat, lon);
   };
 
   return (
@@ -132,22 +118,11 @@ export default function Home() {
       <div className="w-full max-w-lg flex flex-col gap-4">
 
         <div className="flex gap-2">
-          <form onSubmit={handleSearch} className="relative flex-1 shadow-lg rounded-[24px]">
-            <input
-              type="text"
-              placeholder="Search city... (try 'london')"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white/70 backdrop-blur-md rounded-[24px] py-4 pl-6 pr-12 outline-none border-2 border-transparent focus:border-white transition-all text-gray-800 font-semibold"
-            />
-            <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-800 transition-colors">
-              <Search size={20} />
-            </button>
-          </form>
+          <SearchBar onLocationSelect={handleLocationSelect} />
 
           <button
             onClick={() => setUnit(unit === "celsius" ? "fahrenheit" : "celsius")}
-            className="bg-white/70 backdrop-blur-md shadow-lg rounded-[24px] px-6 font-bold text-gray-800 hover:bg-white transition-colors flex items-center justify-center min-w-[70px]"
+            className="bg-white/70 backdrop-blur-md shadow-lg rounded-[24px] px-6 font-bold text-gray-800 hover:bg-white transition-colors flex items-center justify-center min-w-[70px] h-[60px]"
           >
             &deg;{unit === "celsius" ? "C" : "F"}
           </button>
