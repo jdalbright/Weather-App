@@ -35,6 +35,7 @@ import {
   FlaskConical,
   HandHeart,
   Heart,
+  Info,
   Loader2,
   Monitor,
   Minus,
@@ -183,6 +184,7 @@ export default function Home() {
   const [pirateWeatherConnected, setPirateWeatherConnected] = useState(false);
   const [nwsConnected, setNwsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isLocationDelayed, setIsLocationDelayed] = useState(false);
   const [locationLoadError, setLocationLoadError] = useState<string | null>(null);
   const [isDetailed, setIsDetailed] = useState(false);
   const [personality, setPersonality] = useState<PersonalityId>(DEFAULT_PERSONALITY);
@@ -196,6 +198,7 @@ export default function Home() {
   const [resolvedAppearance, setResolvedAppearance] = useState<"light" | "dark">(resolveAppearance("system"));
   const [locationName, setLocationName] = useState("New York");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
   const adviceRequestIdRef = useRef(0);
   const locationRequestIdRef = useRef(0);
   const personalityRef = useRef(personality);
@@ -491,6 +494,19 @@ export default function Home() {
     }
   }, [coords, fetchWeatherForLocation]);
 
+  useEffect(() => {
+    if (!loading || weather) {
+      setIsLocationDelayed(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsLocationDelayed(true);
+    }, 6000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loading, weather]);
+
   const allPersonalities = getAllPersonalities(customPersonalities);
 
   useEffect(() => {
@@ -708,48 +724,52 @@ export default function Home() {
 
               <div>
                 <h3 className="theme-section-label mb-3 px-2 text-sm font-bold">Temperature</h3>
-                <div className="surface-tile flex rounded-full p-1">
+                <div className="surface-tile grid grid-cols-2 gap-2 rounded-[24px] p-2">
                   <button
                     onClick={() => setSettings({ ...settings, tempUnit: "fahrenheit" })}
-                    className={`flex h-11 flex-1 items-center justify-center rounded-full px-4 text-sm font-bold transition-all ${settings.tempUnit === "fahrenheit"
+                    className={`flex min-h-[52px] flex-col items-center justify-center rounded-[20px] px-4 py-2 text-center text-sm font-bold transition-all ${settings.tempUnit === "fahrenheit"
                       ? "bg-[var(--surface-elevated)] text-[var(--accent-text)] shadow-md"
                       : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                       }`}
                   >
-                    Fahrenheit (&deg;F)
+                    <span>Fahrenheit</span>
+                    <span className="text-[11px] font-semibold opacity-75">&deg;F</span>
                   </button>
                   <button
                     onClick={() => setSettings({ ...settings, tempUnit: "celsius" })}
-                    className={`flex h-11 flex-1 items-center justify-center rounded-full px-4 text-sm font-bold transition-all ${settings.tempUnit === "celsius"
+                    className={`flex min-h-[52px] flex-col items-center justify-center rounded-[20px] px-4 py-2 text-center text-sm font-bold transition-all ${settings.tempUnit === "celsius"
                       ? "bg-[var(--surface-elevated)] text-[var(--accent-text)] shadow-md"
                       : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                       }`}
                   >
-                    Celsius (&deg;C)
+                    <span>Celsius</span>
+                    <span className="text-[11px] font-semibold opacity-75">&deg;C</span>
                   </button>
                 </div>
               </div>
 
               <div>
                 <h3 className="theme-section-label mb-3 px-2 text-sm font-bold">Distance & Wind</h3>
-                <div className="surface-tile flex rounded-full p-1">
+                <div className="surface-tile grid grid-cols-2 gap-2 rounded-[24px] p-2">
                   <button
                     onClick={() => setSettings({ ...settings, distUnit: "mph" })}
-                    className={`flex h-11 flex-1 items-center justify-center rounded-full px-4 text-sm font-bold transition-all ${settings.distUnit === "mph"
+                    className={`flex min-h-[52px] flex-col items-center justify-center rounded-[20px] px-4 py-2 text-center text-sm font-bold transition-all ${settings.distUnit === "mph"
                       ? "bg-[var(--surface-elevated)] text-[var(--accent-text)] shadow-md"
                       : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                       }`}
                   >
-                    Imperial (mi, mph)
+                    <span>Imperial</span>
+                    <span className="text-[11px] font-semibold opacity-75">mi, mph</span>
                   </button>
                   <button
                     onClick={() => setSettings({ ...settings, distUnit: "kmh" })}
-                    className={`flex h-11 flex-1 items-center justify-center rounded-full px-4 text-sm font-bold transition-all ${settings.distUnit === "kmh"
+                    className={`flex min-h-[52px] flex-col items-center justify-center rounded-[20px] px-4 py-2 text-center text-sm font-bold transition-all ${settings.distUnit === "kmh"
                       ? "bg-[var(--surface-elevated)] text-[var(--accent-text)] shadow-md"
                       : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                       }`}
                   >
-                    Metric (km, km/h)
+                    <span>Metric</span>
+                    <span className="text-[11px] font-semibold opacity-75">km, km/h</span>
                   </button>
                 </div>
               </div>
@@ -765,7 +785,7 @@ export default function Home() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
                   {allPersonalities.map((option) => {
                     const isActive = option.id === personality;
                     const Icon = PERSONALITY_ICONS[option.icon];
@@ -781,7 +801,7 @@ export default function Home() {
                         <button
                           onClick={() => handlePersonalityChange(option.id)}
                           aria-pressed={isActive}
-                          className="w-full px-3 py-3 text-left"
+                          className="w-full min-h-[88px] px-3 py-3 text-left"
                         >
                           <div className="flex items-center gap-3">
                             <div
@@ -810,7 +830,7 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => handleDeleteCustomPersonality(option.id)}
-                              className="theme-subtle rounded-full px-2 py-1 text-[11px] font-bold transition-colors hover:bg-[var(--surface-chip)] hover:text-[var(--text-primary)]"
+                              className="theme-subtle min-h-[44px] rounded-full px-3 py-2 text-[11px] font-bold transition-colors hover:bg-[var(--surface-chip)] hover:text-[var(--text-primary)]"
                             >
                               Remove
                             </button>
@@ -886,6 +906,112 @@ export default function Home() {
                   ) : null}
                 </div>
               </div>
+
+              {/* About Section */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setIsAboutOpen(!isAboutOpen)}
+                  className="mb-3 flex w-full items-center justify-between gap-2 px-2 text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <Info size={14} className="text-[var(--text-muted)]" />
+                    <h3 className="theme-section-label text-sm font-bold">About</h3>
+                  </div>
+                  <span className={`theme-muted text-xs transition-transform duration-200 ${isAboutOpen ? "rotate-180" : ""}`}>▾</span>
+                </button>
+
+                <CollapsiblePanel open={isAboutOpen}>
+                  <div className="surface-tile rounded-[24px] p-4">
+                    <p className="theme-heading text-sm font-bold">Weather App</p>
+                    <p className="theme-muted mt-0.5 text-xs">
+                      Personality-driven forecasts powered by multiple open data sources and AI.
+                    </p>
+
+                    <div className="mt-4 flex flex-col gap-3">
+
+                      {/* Always-on data sources */}
+                      <div>
+                        <p className="theme-section-label mb-2 text-[11px] font-bold uppercase tracking-wider">Always fetched</p>
+                        <div className="flex flex-col gap-2">
+                          {[
+                            { name: "Open-Meteo Forecast", url: "open-meteo.com", desc: "Current conditions, hourly & 16-day forecast — multi-model ensemble (NOAA, ECMWF, GFS, GEM)", ok: !!weather },
+                            { name: "Open-Meteo Air Quality", url: "open-meteo.com", desc: "AQI, PM2.5, PM10, ozone, NO₂, pollen counts", ok: !!airQuality },
+                            { name: "Open-Meteo Archive", url: "open-meteo.com", desc: "Same-day last year + 3-year climate normals for context", ok: !!historical },
+                            { name: "Open-Meteo Flood", url: "open-meteo.com", desc: "River discharge levels from the GloFAS hydrological model", ok: !!flood },
+                            { name: "Open-Meteo Marine", url: "open-meteo.com", desc: "Wave height, direction, and period — coastal locations only", ok: !!marine },
+                            { name: "NWS Alerts", url: "weather.gov", desc: "Severe weather alerts from the National Weather Service (US only)", ok: nwsConnected },
+                            { name: "OpenStreetMap Nominatim", url: "nominatim.openstreetmap.org", desc: "Reverse geocoding — turns coordinates into readable place names", ok: !!locationName },
+                            { name: "Open-Meteo Geocoding", url: "geocoding-api.open-meteo.com", desc: "Powers the location search bar", ok: true },
+                          ].map((src) => (
+                            <div key={src.name} className="flex items-start gap-2.5">
+                              <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${loading ? "bg-[var(--text-muted)] opacity-40" : src.ok ? "bg-emerald-500" : "bg-[var(--text-muted)] opacity-50"}`} />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <span className="theme-heading text-[11px] font-bold">{src.name}</span>
+                                    <span className="theme-subtle mx-1 text-[10px]">·</span>
+                                    <span className="theme-subtle text-[10px]">{src.url}</span>
+                                  </div>
+                                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${loading ? "bg-[var(--surface-chip)] text-[var(--text-muted)]" : src.ok ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-[var(--surface-chip)] text-[var(--text-muted)]"}`}>
+                                    {loading ? "—" : src.ok ? "OK" : "N/A"}
+                                  </span>
+                                </div>
+                                <p className="theme-muted mt-0.5 text-[10px] leading-relaxed">{src.desc}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Server-side / keyed sources */}
+                      <div className="border-t border-[color:var(--border-soft)] pt-3">
+                        <p className="theme-section-label mb-1 text-[11px] font-bold uppercase tracking-wider">Enhanced (server-side)</p>
+                        <p className="theme-subtle mb-2 text-[10px]">Falls back gracefully if API keys are not configured.</p>
+                        <div className="flex flex-col gap-2">
+                          {[
+                            { name: "WeatherAPI", url: "weatherapi.com", desc: "Moon phase, moonrise/set, sunrise/sunset times", ok: !!astronomy },
+                            { name: "Pirate Weather", url: "pirateweather.net", desc: "Minute-by-minute rain forecast for the next hour", ok: pirateWeatherConnected },
+                            { name: "Aviation Weather (METAR)", url: "aviationweather.gov", desc: "Raw observations from the nearest reporting airport", ok: metarConnected },
+                          ].map((src) => (
+                            <div key={src.name} className="flex items-start gap-2.5">
+                              <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${loading ? "bg-[var(--text-muted)] opacity-40" : src.ok ? "bg-emerald-500" : "bg-amber-500/70"}`} />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <span className="theme-heading text-[11px] font-bold">{src.name}</span>
+                                    <span className="theme-subtle mx-1 text-[10px]">·</span>
+                                    <span className="theme-subtle text-[10px]">{src.url}</span>
+                                  </div>
+                                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${loading ? "bg-[var(--surface-chip)] text-[var(--text-muted)]" : src.ok ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/15 text-amber-600 dark:text-amber-400"}`}>
+                                    {loading ? "—" : src.ok ? "OK" : "No key"}
+                                  </span>
+                                </div>
+                                <p className="theme-muted mt-0.5 text-[10px] leading-relaxed">{src.desc}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* AI + Privacy */}
+                      <div className="border-t border-[color:var(--border-soft)] pt-3">
+                        <p className="theme-section-label mb-2 text-[11px] font-bold uppercase tracking-wider">AI & Privacy</p>
+                        <div className="flex flex-col gap-1.5">
+                          <p className="theme-muted text-[10px] leading-relaxed">
+                            <span className="theme-heading font-bold">Gemini Flash</span> via Vercel AI Gateway generates personality-driven advice on each refresh using current conditions, AQI, and active alerts. No data is stored.
+                          </p>
+                          <p className="theme-muted text-[10px] leading-relaxed">
+                            Your location is never stored on a server. Settings, recent searches, and custom personalities are saved locally on this device only.
+                          </p>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                </CollapsiblePanel>
+              </div>
+
             </div>
           </div>
         </CollapsiblePanel>
@@ -894,7 +1020,14 @@ export default function Home() {
       {loading && !weather ? (
         <div className="flex flex-1 flex-col items-center justify-center space-y-4 pt-20">
           <Loader2 className="animate-spin text-[var(--text-primary)]" size={48} />
-          <p className="theme-muted animate-pulse font-semibold">Checking the skies...</p>
+          <div className="space-y-1 text-center">
+            <p className="theme-muted animate-pulse font-semibold">Checking the skies...</p>
+            {isLocationDelayed ? (
+              <p className="theme-subtle max-w-xs text-sm">
+                Location is taking longer than usual. Search for a city above while we keep trying.
+              </p>
+            ) : null}
+          </div>
         </div>
       ) : locationLoadError && !weather ? (
         <div className="surface-card mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-3 rounded-[32px] px-8 py-12 text-center">

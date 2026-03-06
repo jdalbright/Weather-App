@@ -349,6 +349,57 @@ body > * {
   overflow: hidden;
 }
 
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-fade-horizontal {
+  position: relative;
+}
+
+.scroll-fade-horizontal::before,
+.scroll-fade-horizontal::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.scroll-fade-horizontal::before {
+  left: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--surface-card-strong) 96%, transparent), transparent);
+}
+
+.scroll-fade-horizontal::after {
+  right: 0;
+  background: linear-gradient(270deg, color-mix(in srgb, var(--surface-card-strong) 96%, transparent), transparent);
+}
+
+.search-dropdown {
+  position: absolute;
+  scrollbar-gutter: stable;
+}
+
+.search-dropdown::after {
+  content: "";
+  position: sticky;
+  left: 0;
+  bottom: 0;
+  display: block;
+  height: 20px;
+  margin-top: -20px;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--surface-card-strong) 92%, transparent));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dropdown-panel-enter,
   .dropdown-panel-enter-soft,
