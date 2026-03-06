@@ -586,26 +586,30 @@ export default function WeatherCard({
             {/* Personality + AI advice */}
             <div className="surface-card-strong overflow-hidden rounded-[30px]">
                 <div className="border-b theme-divider bg-[linear-gradient(135deg,rgba(255,255,255,0.08),transparent_75%)] px-5 py-5">
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex min-w-0 items-start gap-3">
                             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm">
                                 <PersonalityIcon size={20} />
                             </div>
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                                 <p className="theme-section-label text-[11px] font-bold tracking-[0.22em]">Forecast Voice</p>
-                                <h2 className="theme-heading mt-1 text-[1.7rem] font-bold leading-none">{selectedPersonality.label}</h2>
-                                <div className="mt-2 flex flex-wrap items-center gap-2">
-                                    <span className="surface-chip rounded-full px-2.5 py-1 text-[11px] font-bold">
+                                <h2 className="theme-heading mt-1 text-[clamp(2rem,8vw,2.6rem)] font-bold leading-[0.95] sm:text-[2.2rem]">
+                                    {selectedPersonality.label}
+                                </h2>
+                                <div className="mt-3 flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                                    <span className="surface-chip max-w-full rounded-full px-2.5 py-1 text-[11px] font-bold leading-snug">
                                         {selectedPersonality.preview}
                                     </span>
-                                    <span className="theme-muted text-sm">{selectedPersonality.description}</span>
+                                    <span className="theme-muted max-w-[34ch] text-sm leading-relaxed">
+                                        {selectedPersonality.description}
+                                    </span>
                                 </div>
                             </div>
                         </div>
 
                         <button
                             onClick={onOpenSettings}
-                            className="surface-chip inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold transition-all hover:border-[color:var(--accent-border)] hover:text-[var(--accent-text)]"
+                            className="surface-chip inline-flex shrink-0 self-start items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold transition-all hover:border-[color:var(--accent-border)] hover:text-[var(--accent-text)] sm:self-auto"
                         >
                             Change
                             <ChevronDown className="-rotate-90" size={14} />
