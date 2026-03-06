@@ -46,6 +46,10 @@
   --selection-text: #0f172a;
 }
 
+body {
+  overscroll-behavior-y: none;
+}
+
 html[data-color-mode="light"] {
   color-scheme: light;
 }
