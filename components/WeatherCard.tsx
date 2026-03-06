@@ -100,9 +100,9 @@ const statTileClass = "surface-tile flex items-center gap-3 rounded-2xl p-3";
 const statValueClass = "theme-heading font-semibold";
 const forecastTileClass = "surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center gap-2 rounded-2xl p-3";
 const forecastDayTileClass = "surface-tile flex min-w-[80px] shrink-0 snap-start flex-col items-center justify-between gap-1 rounded-2xl p-3 h-[120px]";
-const heroCardClass = "surface-card-strong relative overflow-hidden rounded-[32px] px-5 py-6 sm:px-8 sm:py-10";
-const insightGridClass = "mt-3 grid w-full max-w-[26rem] grid-cols-2 gap-2 sm:max-w-none sm:grid-cols-3 sm:gap-3";
-const insightPillClass = "flex min-h-[76px] w-full min-w-0 items-center justify-between gap-2 sm:gap-3 rounded-[24px] border border-[color:var(--border-soft)] bg-[var(--surface-chip)] text-[var(--text-secondary)] px-3 sm:px-4 py-3.5 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover:border-[color:var(--border-strong)] hover:shadow-[var(--shadow-soft)]";
+const heroCardClass = "weather-card-hero surface-card-strong relative overflow-hidden rounded-[32px] px-5 py-6 sm:px-8 sm:py-10";
+const insightGridClass = "weather-card-insight-grid mt-3 grid w-full max-w-[26rem] grid-cols-2 gap-2 sm:max-w-none sm:grid-cols-3 sm:gap-3";
+const insightPillClass = "weather-card-insight-pill flex min-h-[76px] w-full min-w-0 items-center justify-between gap-2 sm:gap-3 rounded-[24px] border border-[color:var(--border-soft)] bg-[var(--surface-chip)] text-[var(--text-secondary)] px-3 sm:px-4 py-3.5 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover:border-[color:var(--border-strong)] hover:shadow-[var(--shadow-soft)]";
 const insightPillOpenClass = "border-[color:var(--accent-border)] bg-[var(--surface-elevated)] shadow-[var(--shadow-soft)]";
 const sectionAccordionButtonClass = "surface-tile flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[24px] px-4 py-3 text-left transition-all hover:border-[color:var(--border-strong)] hover:bg-[var(--surface-elevated)]";
 const MIN_FORECAST_CHANCE_TO_SHOW = 15;
@@ -1003,9 +1003,9 @@ export default function WeatherCard({
                 </div>
             )}
 
-            <div className="flex flex-col sm:flex-row sm:flex-nowrap gap-6 w-full items-start flex-1 min-w-0">
+            <div className="weather-card-columns flex w-full min-w-0 flex-1 flex-col items-start gap-6 sm:flex-row sm:flex-nowrap">
                 {/* Left Column (Hero & Personality) */}
-                <div className="flex flex-col gap-6 w-full sm:w-[42%] sm:min-w-[340px] sm:flex-none sm:flex-shrink-0 sm:sticky sm:top-[5.5rem] sm:-mt-1.5 sm:pb-[5.5rem]">
+                <div className="weather-card-sidebar flex w-full flex-col gap-6 sm:w-[42%] sm:min-w-[340px] sm:flex-none sm:flex-shrink-0 sm:sticky sm:top-[5.5rem] sm:-mt-1.5 sm:pb-[5.5rem]">
                     <div className={heroCardClass}>
                         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,var(--weather-glow),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_30%)]" />
                         <div className="pointer-events-none absolute -left-12 top-8 h-32 w-32 rounded-full bg-[var(--weather-glow)] blur-3xl opacity-40" />
@@ -1339,7 +1339,7 @@ export default function WeatherCard({
                         </div>
                     </div>
 
-                    <div className="surface-card rounded-[28px] p-3 sm:hidden">
+                    <div className="weather-card-mobile-detail-toggle surface-card rounded-[28px] p-3 sm:hidden">
                         <button
                             onClick={onToggleDetail}
                             className="organic-button w-full justify-between px-5 text-sm"
@@ -1351,7 +1351,7 @@ export default function WeatherCard({
                         </button>
                     </div>
 
-                    <div className="w-full sm:hidden relative z-10">
+                    <div className="weather-card-mobile-detail relative z-10 w-full sm:hidden">
                         <CollapsiblePanel open={isDetailed} className="w-full">
                             {detailedContent}
                         </CollapsiblePanel>
@@ -1359,7 +1359,7 @@ export default function WeatherCard({
                 </div>
 
                 {/* Detailed View Section (Always visible on desktop) */}
-                <div className="hidden sm:block sm:flex-1 sm:flex-grow sm:min-w-0">
+                <div className="weather-card-desktop-detail hidden sm:block sm:min-w-0 sm:flex-1 sm:flex-grow">
                     {detailedContent}
                 </div>
             </div>

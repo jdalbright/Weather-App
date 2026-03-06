@@ -211,6 +211,45 @@ body > * {
   }
 }
 
+@media (orientation: landscape) and (max-height: 540px) and (hover: none) and (pointer: coarse) {
+  .weather-card-columns {
+    flex-direction: column;
+  }
+
+  .weather-card-sidebar {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    position: static;
+    top: auto;
+    margin-top: 0;
+    padding-bottom: 0;
+  }
+
+  .weather-card-hero {
+    padding-top: 1.25rem;
+    padding-bottom: 1.25rem;
+  }
+
+  .weather-card-insight-grid {
+    max-width: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .weather-card-insight-pill {
+    min-height: 4.5rem;
+  }
+
+  .weather-card-mobile-detail-toggle,
+  .weather-card-mobile-detail {
+    display: block;
+  }
+
+  .weather-card-desktop-detail {
+    display: none;
+  }
+}
+
 .organic-button {
   background: var(--surface-elevated);
   border: 1px solid var(--border-soft);
