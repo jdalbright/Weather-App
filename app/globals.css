@@ -1,26 +1,101 @@
 @import "tailwindcss";
 
+@theme {
+  --color-sun-yellow: #fcd34d;
+  --color-sun-orange: #fb923c;
+  --color-cloud-white: #ffffff;
+  --color-cloud-gray: #e2e8f0;
+  --color-rain-blue: #60a5fa;
+  --color-rain-dark: #3b82f6;
+  --color-sky-blue: #bae6fd;
+  
+  --color-text-primary: #334155;
+  --color-text-secondary: #64748b;
+  
+  --font-sans: 'Quicksand', 'Nunito', sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --app-bg: var(--color-sky-blue);
+  --card-bg: rgba(255, 255, 255, 0.85); /* Not glass! Just semi-transparent white for organic feel */
+  --card-shadow: 0 10px 40px -10px rgba(59, 130, 246, 0.15);
+  --border-radius-large: 32px;
+  --border-radius-medium: 24px;
+  --border-radius-small: 16px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  max-width: 100vw;
+  overflow-x: hidden;
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  background-color: var(--app-bg);
+  transition: background-color 1s ease;
+  min-height: 100vh;
+}
+
+/* Base Organic Card Style */
+.organic-card {
+  background-color: var(--card-bg);
+  border-radius: var(--border-radius-large);
+  box-shadow: var(--card-shadow);
+  padding: 24px;
+  border: 4px solid white;
+}
+
+.organic-button {
+  background-color: white;
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  padding: 8px 16px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.organic-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border-color: var(--color-sky-blue);
+}
+
+/* Beautiful custom scrollbar for horizontal scrolling details */
+::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-cloud-gray);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+/* We will use specific classes on the body to drive the color theme */
+body.theme-sun {
+  --app-bg: linear-gradient(to bottom, #bae6fd, #fdf4ff);
+}
+body.theme-rain {
+  --app-bg: linear-gradient(to bottom, #94a3b8, #cbd5e1);
+  --card-shadow: 0 10px 40px -10px rgba(15, 23, 42, 0.15);
+}
+body.theme-cloud {
+  --app-bg: linear-gradient(to bottom, #e2e8f0, #f8fafc);
+  --card-shadow: 0 10px 40px -10px rgba(100, 116, 139, 0.15);
 }
