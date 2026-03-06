@@ -310,6 +310,18 @@ export default function Home() {
 
   useEffect(() => {
     document.documentElement.dataset.weatherTheme = theme;
+    // Keep the browser chrome color in sync with the current weather theme
+    const THEME_COLORS: Record<string, string> = {
+      'theme-sun': '#b7e7ff',
+      'theme-cloud': '#dce7f2',
+      'theme-rain': '#9eb2c9',
+      'theme-snow': '#dff5ff',
+      'theme-night': '#10203b',
+    };
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.setAttribute('content', THEME_COLORS[theme] ?? '#b7e7ff');
+    }
   }, [theme]);
 
   useEffect(() => {

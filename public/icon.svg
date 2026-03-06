@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#cff0ff"/>
+      <stop offset="100%" stop-color="#a8daef"/>
+    </radialGradient>
+    <radialGradient id="sun" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff9c4"/>
+      <stop offset="100%" stop-color="#ffd54f"/>
+    </radialGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="url(#bg)"/>
+  <!-- Sun body -->
+  <circle cx="296" cy="188" r="68" fill="url(#sun)"/>
+  <!-- Sun rays -->
+  <g stroke="#ffd54f" stroke-width="12" stroke-linecap="round">
+    <line x1="296" y1="96" x2="296" y2="76"/>
+    <line x1="353" y1="114" x2="367" y2="100"/>
+    <line x1="374" y1="170" x2="394" y2="166"/>
+    <line x1="353" y1="227" x2="367" y2="243"/>
+    <line x1="226" y1="114" x2="212" y2="100"/>
+    <line x1="208" y1="170" x2="188" y2="166"/>
+  </g>
+  <!-- Main cloud body -->
+  <ellipse cx="226" cy="310" rx="108" ry="66" fill="white"/>
+  <!-- Cloud bumps -->
+  <circle cx="174" cy="298" r="52" fill="white"/>
+  <circle cx="256" cy="278" r="62" fill="white"/>
+  <circle cx="326" cy="296" r="50" fill="white"/>
+  <!-- Cloud base fill -->
+  <rect x="122" y="310" width="254" height="66" fill="white" rx="0"/>
+  <!-- Subtle shadow under cloud -->
+  <ellipse cx="226" cy="374" rx="110" ry="12" fill="#b0cfdf" opacity="0.3"/>
+</svg>

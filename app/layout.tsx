@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Quicksand } from "next/font/google"; // Using our organic fonts
 import "./globals.css";
+import PwaManager from "@/components/PwaManager";
 
 const quicksand = Quicksand({ subsets: ["latin"], variable: '--font-sans' });
 const appearanceScript = `
@@ -27,9 +28,25 @@ const appearanceScript = `
 })();
 `;
 
+export const viewport: Viewport = {
+  themeColor: "#b7e7ff",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export const metadata: Metadata = {
   title: "Weather Vibe",
-  description: "A cute, personality-driven weather app.",
+  description: "Personality-driven weather forecasts powered by AI.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Weather Vibe",
+  },
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
@@ -41,6 +58,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${quicksand.variable} antialiased`}>
         <script dangerouslySetInnerHTML={{ __html: appearanceScript }} />
+        <PwaManager />
         {children}
       </body>
     </html>

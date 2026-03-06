@@ -102,7 +102,7 @@ const forecastTileClass = "surface-tile flex min-w-[70px] shrink-0 snap-start fl
 const forecastDayTileClass = "surface-tile flex min-w-[80px] shrink-0 snap-start flex-col items-center justify-between gap-1 rounded-2xl p-3 h-[120px]";
 const heroCardClass = "surface-card-strong relative overflow-hidden rounded-[32px] px-5 py-6 sm:px-8 sm:py-10";
 const insightGridClass = "mt-3 grid w-full max-w-[26rem] grid-cols-2 gap-2 sm:max-w-none sm:grid-cols-3 sm:gap-3";
-const insightPillClass = "flex min-h-[76px] w-full min-w-0 items-center justify-between gap-3 rounded-[24px] border border-[color:var(--border-soft)] bg-[var(--surface-chip)] text-[var(--text-secondary)] px-4 py-3.5 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover:border-[color:var(--border-strong)] hover:shadow-[var(--shadow-soft)]";
+const insightPillClass = "flex min-h-[76px] w-full min-w-0 items-center justify-between gap-2 sm:gap-3 rounded-[24px] border border-[color:var(--border-soft)] bg-[var(--surface-chip)] text-[var(--text-secondary)] px-3 sm:px-4 py-3.5 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover:border-[color:var(--border-strong)] hover:shadow-[var(--shadow-soft)]";
 const insightPillOpenClass = "border-[color:var(--accent-border)] bg-[var(--surface-elevated)] shadow-[var(--shadow-soft)]";
 const sectionAccordionButtonClass = "surface-tile flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[24px] px-4 py-3 text-left transition-all hover:border-[color:var(--border-strong)] hover:bg-[var(--surface-elevated)]";
 const MIN_FORECAST_CHANCE_TO_SHOW = 15;
@@ -1058,7 +1058,7 @@ export default function WeatherCard({
                                             onClick={() => setShowConfidenceDetail(v => !v)}
                                             className={`${insightPillClass} ${showConfidenceDetail ? insightPillOpenClass : ""} ${(!hasStationPill && !hasMinutelyPill) ? "col-span-2 sm:col-span-3" : !hasStationPill ? "col-span-2" : ""}`}
                                         >
-                                            <div className="flex min-w-0 items-center gap-3">
+                                            <div className="flex min-w-0 items-center gap-2">
                                                 <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${confidenceDotClass}`} />
                                                 <div className="min-w-0">
                                                     <p className="theme-section-label text-[10px] font-bold tracking-[0.2em]">Models</p>
