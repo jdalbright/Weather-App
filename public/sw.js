@@ -66,7 +66,36 @@ self.addEventListener('fetch', (event) => {
 
   // Network-only: all live weather/AI APIs
   if (isNetworkOnly(request.url)) {
-    event.respondWith(fetch(request));
+    event.respondWith(
+      fetch(request).catch(() => {
+        const fallbackHeaders = { 'Content-Type': 'application/json' };
+
+        if (request.url.includes('/api/extended-weather')) {
+          return new Response(
+            JSON.stringify({
+              astronomy: null,
+              alerts: [],
+              metar: null,
+              metarConnected: false,
+              rainSummary: null,
+              pirateWeatherConnected: false,
+              nwsAlerts: [],
+              nwsConnected: false,
+            }),
+            { status: 503, headers: fallbackHeaders }
+          );
+        }
+
+        if (request.url.includes('/api/chat') || request.url.includes('/api/personality')) {
+          return new Response(
+            JSON.stringify({ error: 'Network unavailable' }),
+            { status: 503, headers: fallbackHeaders }
+          );
+        }
+
+        return Response.error();
+      })
+    );
     return;
   }
 

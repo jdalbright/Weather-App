@@ -51,14 +51,16 @@ const APPEARANCE_STORAGE_KEY = "weather-appearance";
 const CUSTOM_PERSONALITIES_STORAGE_KEY = "weather-custom-personalities";
 const DISMISSED_ALERTS_STORAGE_KEY = "weather-dismissed-alerts";
 
-const PULL_THRESHOLD = 72;
-const MAX_PULL = PULL_THRESHOLD + 24;
-const PULL_INDICATOR_SIZE = 40;
-const PULL_INDICATOR_REFRESH_HEIGHT = 56;
-
 type AdviceExtras = {
   aqi?: number;
   alerts?: string;
+};
+
+type ChatAdviceResponse = {
+  heroText?: string;
+  next24Text?: string;
+  adviceText?: string;
+  text?: string;
 };
 
 type AlertSource = "weatherapi" | "nws";
@@ -206,11 +208,14 @@ export default function Home() {
   const [customPersonalityError, setCustomPersonalityError] = useState<string | null>(null);
   const [isGeneratingCustomPersonality, setIsGeneratingCustomPersonality] = useState(false);
   const [dismissedAlertKeys, setDismissedAlertKeys] = useState<string[]>([]);
-  const [alertRefreshTick, setAlertRefreshTick] = useState(() => Date.now());
+  const [hasMounted, setHasMounted] = useState(false);
+  const [alertRefreshTick, setAlertRefreshTick] = useState(0);
+  const [aiHeroSummary, setAiHeroSummary] = useState("");
+  const [aiNext24Summary, setAiNext24Summary] = useState("");
   const [aiAdvice, setAiAdvice] = useState("");
   const [theme, setTheme] = useState("theme-sun");
   const [appearance, setAppearance] = useState<Appearance>("system");
-  const [resolvedAppearance, setResolvedAppearance] = useState<"light" | "dark">(resolveAppearance("system"));
+  const [resolvedAppearance, setResolvedAppearance] = useState<"light" | "dark">("light");
   const [locationName, setLocationName] = useState("New York");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
@@ -226,14 +231,12 @@ export default function Home() {
     distUnit: "mph",
   });
 
-  // Pull-to-refresh state
-  const [pullDistance, setPullDistance] = useState(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const pullTouchStartRef = useRef<number | null>(null);
-
   // Hydrate from localStorage after mount to avoid SSR mismatch
   useEffect(() => {
     let frameId = 0;
+
+    setHasMounted(true);
+    setAlertRefreshTick(Date.now());
 
     const savedPersonality = localStorage.getItem("weather-personality");
     const savedSettings = localStorage.getItem("weather-settings");
@@ -341,9 +344,7 @@ export default function Home() {
     const media = window.matchMedia("(prefers-color-scheme: dark)") as CompatibleMediaQueryList;
 
     const syncAppearance = () => {
-      const resolved = appearance === "system"
-        ? (media.matches ? "dark" : "light")
-        : appearance;
+      const resolved = resolveAppearance(appearance);
       setResolvedAppearance(resolved);
       document.documentElement.dataset.colorMode = resolved;
     };
@@ -395,13 +396,24 @@ export default function Home() {
           }
         })
       });
-      const json = await res.json();
+      const json = await res.json() as ChatAdviceResponse;
+      const nextHeroSummary = typeof json.heroText === "string" ? json.heroText.trim() : "";
+      const nextNext24Summary = typeof json.next24Text === "string" ? json.next24Text.trim() : "";
+      const nextAdvice = typeof json.adviceText === "string"
+        ? json.adviceText.trim()
+        : typeof json.text === "string"
+          ? json.text.trim()
+          : "";
 
       if (requestId === adviceRequestIdRef.current) {
-        setAiAdvice(json.text);
+        setAiHeroSummary(nextHeroSummary);
+        setAiNext24Summary(nextNext24Summary);
+        setAiAdvice(nextAdvice);
       }
     } catch {
       if (requestId === adviceRequestIdRef.current) {
+        setAiHeroSummary("");
+        setAiNext24Summary("");
         setAiAdvice("Failed to get advice.");
       }
     }
@@ -426,6 +438,8 @@ export default function Home() {
     setRainSummary(null);
     setPirateWeatherConnected(false);
     setNwsConnected(false);
+    setAiHeroSummary("");
+    setAiNext24Summary("");
     setAiAdvice("");
 
     type ExtendedWeatherResponse = {
@@ -499,49 +513,6 @@ export default function Home() {
     setLocationLoadError("Couldn't load weather for this location. Try again.");
     setLoading(false);
   }, [fetchAIAdvice, settings.distUnit, settings.tempUnit]);
-
-  // Pull-to-refresh touch handlers
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    if (window.scrollY === 0 && !loading) {
-      pullTouchStartRef.current = e.touches[0].clientY;
-    }
-  }, [loading]);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (pullTouchStartRef.current === null) return;
-    if (window.scrollY > 0) {
-      pullTouchStartRef.current = null;
-      setPullDistance(0);
-      return;
-    }
-    const delta = e.touches[0].clientY - pullTouchStartRef.current;
-    if (delta <= 0) {
-      pullTouchStartRef.current = null;
-      setPullDistance(0);
-      return;
-    }
-    if (e.cancelable) {
-      e.preventDefault();
-    }
-    const distance = Math.min(delta * 0.45, MAX_PULL);
-    setPullDistance(distance);
-  }, []);
-
-  const handleTouchEnd = useCallback(() => {
-    if (pullTouchStartRef.current === null) return;
-    pullTouchStartRef.current = null;
-    const shouldRefresh = pullDistance >= PULL_THRESHOLD && coords && !loading;
-    setPullDistance(0);
-    if (shouldRefresh) {
-      setIsRefreshing(true);
-      void fetchWeatherForLocation(coords.lat, coords.lon, coords.countryCode);
-    }
-  }, [pullDistance, coords, loading, fetchWeatherForLocation]);
-
-  // Clear the refreshing indicator once loading finishes
-  useEffect(() => {
-    if (!loading) setIsRefreshing(false);
-  }, [loading]);
 
   const initialFetchRef = useRef(false);
 
@@ -773,7 +744,10 @@ export default function Home() {
       id: "system" as const,
       label: "System",
       Icon: Monitor,
-      badgeClass: "bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.18),_rgba(255,255,255,0.04)_45%),linear-gradient(160deg,_#334155,_#0f172a)] shadow-[0_12px_24px_rgba(15,23,42,0.28)] ring-1 ring-white/10",
+      badgeClass: "shadow-[0_12px_24px_rgba(15,23,42,0.28)] ring-1 ring-white/10",
+      badgeStyle: {
+        background: "radial-gradient(circle at top, rgba(255,255,255,0.18), rgba(255,255,255,0.04) 45%), linear-gradient(160deg, #334155, #0f172a)",
+      },
       iconClass: "text-slate-100",
       description: `Matches your device (${resolvedAppearance}).`,
     },
@@ -781,7 +755,10 @@ export default function Home() {
       id: "light" as const,
       label: "Light",
       Icon: SunMedium,
-      badgeClass: "bg-[radial-gradient(circle_at_top,_#ffffff,_#fef3c7_52%,_#fdba74)] shadow-[0_12px_24px_rgba(245,158,11,0.28)] ring-1 ring-white/70",
+      badgeClass: "shadow-[0_12px_24px_rgba(245,158,11,0.28)] ring-1 ring-white/70",
+      badgeStyle: {
+        background: "radial-gradient(circle at top, #ffffff, #fef3c7 52%, #fdba74)",
+      },
       iconClass: "text-amber-500",
       description: "Sunny and bright.",
     },
@@ -789,7 +766,10 @@ export default function Home() {
       id: "dark" as const,
       label: "Dark",
       Icon: MoonStar,
-      badgeClass: "bg-[radial-gradient(circle_at_30%_30%,_rgba(255,255,255,0.18),_transparent_25%),linear-gradient(160deg,_#0f172a,_#1e3a5f_55%,_#312e81)] shadow-[0_14px_28px_rgba(15,23,42,0.35)] ring-1 ring-white/20",
+      badgeClass: "shadow-[0_14px_28px_rgba(15,23,42,0.35)] ring-1 ring-white/20",
+      badgeStyle: {
+        background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.18), transparent 25%), linear-gradient(160deg, #0f172a, #1e3a5f 55%, #312e81)",
+      },
       iconClass: "text-indigo-200",
       description: "Calm and low-glow.",
     },
@@ -811,58 +791,20 @@ export default function Home() {
     scrollSettingsIntoView();
   }, [scrollSettingsIntoView]);
 
-  const pullRatio = Math.min(pullDistance / PULL_THRESHOLD, 1);
-  const pullIndicatorHeight = isRefreshing
-    ? PULL_INDICATOR_REFRESH_HEIGHT
-    : pullDistance;
+  const handleManualRefresh = useCallback(() => {
+    if (!coords || loading) return;
+    void fetchWeatherForLocation(coords.lat, coords.lon, coords.countryCode);
+  }, [coords, fetchWeatherForLocation, loading]);
+
+  const mainStyle = hasMounted
+    ? { paddingTop: "calc(env(safe-area-inset-top, 0px) + 2rem)" }
+    : undefined;
 
   return (
     <main
-      className="mx-auto flex w-full min-h-screen max-w-7xl flex-col gap-8 px-4 pt-0 pb-8 text-[var(--text-primary)] md:px-8"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchEnd}
-      style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 2rem)" }}
+      className="mx-auto flex w-full min-h-screen max-w-7xl flex-col gap-8 px-4 pt-8 pb-8 text-[var(--text-primary)] md:px-8"
+      style={mainStyle}
     >
-
-      {/* Pull-to-refresh indicator */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none -mb-4 flex items-end justify-center overflow-hidden transition-[height] duration-150 ease-out"
-        style={{ height: pullIndicatorHeight }}
-      >
-        <div
-          className="flex items-center justify-center rounded-full surface-card-strong shadow-md"
-          style={
-            isRefreshing
-              ? {
-                  width: PULL_INDICATOR_SIZE,
-                  height: PULL_INDICATOR_SIZE,
-                  opacity: 1,
-                  animation: "pull-refresh-pop 0.3s ease-out forwards",
-                }
-              : {
-                  width: PULL_INDICATOR_SIZE,
-                  height: PULL_INDICATOR_SIZE,
-                  opacity: pullDistance > 0 ? pullRatio : 0,
-                  transform: `translateY(${Math.max((1 - pullRatio) * 16, 0)}px)`,
-                  transition: "opacity 150ms, transform 150ms",
-                }
-          }
-        >
-          <RefreshCw
-            size={18}
-            className="text-[var(--accent-text)]"
-            style={
-              isRefreshing
-                ? { animation: "pull-refresh-spin 0.7s linear infinite" }
-                : { transform: `rotate(${pullRatio * 360}deg)`, transition: "transform 150ms" }
-            }
-          />
-        </div>
-      </div>
-
       {/* Top Search, Units & Personality Settings */}
       <div ref={settingsAnchorRef} className="mx-auto flex w-full sm:max-w-7xl flex-col gap-8">
 
@@ -878,6 +820,19 @@ export default function Home() {
           </div>
 
           <button
+            type="button"
+            onClick={handleManualRefresh}
+            disabled={!coords || loading}
+            aria-label="Refresh forecast"
+            className={`surface-card-strong flex h-14 min-w-[60px] items-center justify-center rounded-[24px] px-4 border transition-all ${!coords || loading
+              ? "cursor-not-allowed opacity-60 text-secondary-var"
+              : "text-primary-var hover-bg-surface-elevated-var"
+              }`}
+          >
+            <RefreshCw size={22} className={loading ? "animate-spin" : undefined} />
+          </button>
+
+          <button
             onClick={() => {
               if (isSettingsOpen) {
                 setIsSettingsOpen(false);
@@ -887,8 +842,8 @@ export default function Home() {
               openAllSettings();
             }}
             className={`surface-card-strong flex h-14 min-w-[60px] items-center justify-center rounded-[24px] px-4 border transition-all ${isSettingsOpen
-              ? "border-[color:var(--accent-border)] text-[var(--accent-text)]"
-              : "text-[var(--text-primary)] hover:bg-[var(--surface-elevated)]"
+              ? "border-accent-var text-accent-var"
+              : "text-primary-var hover-bg-surface-elevated-var"
               }`}
           >
             {isSettingsOpen ? <X size={24} /> : <Settings size={24} />}
@@ -930,12 +885,15 @@ export default function Home() {
                         onClick={() => applyAppearanceChange(option.id)}
                         aria-pressed={isActive}
                         className={`rounded-[20px] border p-3 text-center transition-all ${isActive
-                          ? "bg-[var(--surface-elevated)] border-[color:var(--accent-border)] shadow-md"
-                          : "surface-tile hover:bg-[var(--surface-card-strong)] hover:border-[color:var(--border-strong)]"
+                          ? "bg-surface-elevated-var border-accent-var shadow-md"
+                          : "surface-tile hover-bg-surface-card-strong-var hover-border-strong-var"
                           }`}
                       >
                         <div className="flex flex-col items-center gap-2">
-                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${option.badgeClass}`}>
+                          <span
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${option.badgeClass}`}
+                            style={option.badgeStyle}
+                          >
                             <Icon size={18} className={option.iconClass} />
                           </span>
                           <span className="theme-heading text-xs font-bold">{option.label}</span>
@@ -955,8 +913,8 @@ export default function Home() {
                   <button
                     onClick={() => setSettings({ ...settings, tempUnit: "fahrenheit" })}
                     className={`flex min-h-[52px] flex-col items-center justify-center rounded-[20px] px-4 py-2 text-center text-sm font-bold transition-all ${settings.tempUnit === "fahrenheit"
-                      ? "bg-[var(--surface-elevated)] text-[var(--accent-text)] shadow-md"
-                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      ? "bg-surface-elevated-var text-accent-var shadow-md"
+                      : "text-secondary-var hover-text-primary-var"
                       }`}
                   >
                     <span>Fahrenheit</span>
@@ -965,8 +923,8 @@ export default function Home() {
                   <button
                     onClick={() => setSettings({ ...settings, tempUnit: "celsius" })}
                     className={`flex min-h-[52px] flex-col items-center justify-center rounded-[20px] px-4 py-2 text-center text-sm font-bold transition-all ${settings.tempUnit === "celsius"
-                      ? "bg-[var(--surface-elevated)] text-[var(--accent-text)] shadow-md"
-                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      ? "bg-surface-elevated-var text-accent-var shadow-md"
+                      : "text-secondary-var hover-text-primary-var"
                       }`}
                   >
                     <span>Celsius</span>
@@ -981,8 +939,8 @@ export default function Home() {
                   <button
                     onClick={() => setSettings({ ...settings, distUnit: "mph" })}
                     className={`flex min-h-[52px] flex-col items-center justify-center rounded-[20px] px-4 py-2 text-center text-sm font-bold transition-all ${settings.distUnit === "mph"
-                      ? "bg-[var(--surface-elevated)] text-[var(--accent-text)] shadow-md"
-                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      ? "bg-surface-elevated-var text-accent-var shadow-md"
+                      : "text-secondary-var hover-text-primary-var"
                       }`}
                   >
                     <span>Imperial</span>
@@ -991,8 +949,8 @@ export default function Home() {
                   <button
                     onClick={() => setSettings({ ...settings, distUnit: "kmh" })}
                     className={`flex min-h-[52px] flex-col items-center justify-center rounded-[20px] px-4 py-2 text-center text-sm font-bold transition-all ${settings.distUnit === "kmh"
-                      ? "bg-[var(--surface-elevated)] text-[var(--accent-text)] shadow-md"
-                      : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                      ? "bg-surface-elevated-var text-accent-var shadow-md"
+                      : "text-secondary-var hover-text-primary-var"
                       }`}
                   >
                     <span>Metric</span>
@@ -1027,7 +985,7 @@ export default function Home() {
                   className="mb-3 flex w-full items-center justify-between gap-2 px-2 text-left"
                 >
                   <div className="flex items-center gap-2">
-                    <Info size={14} className="text-[var(--text-muted)]" />
+                    <Info size={14} className="text-muted-var" />
                     <h3 className="theme-section-label text-sm font-bold">About</h3>
                   </div>
                   <span className={`theme-muted text-xs transition-transform duration-200 ${isAboutOpen ? "rotate-180" : ""}`}>▾</span>
@@ -1057,7 +1015,7 @@ export default function Home() {
                             { name: "Open-Meteo Geocoding", url: "geocoding-api.open-meteo.com", desc: "Powers the location search bar", ok: true },
                           ].map((src) => (
                             <div key={src.name} className="flex items-start gap-2.5">
-                              <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${loading ? "bg-[var(--text-muted)] opacity-40" : src.ok ? "bg-emerald-500" : "bg-[var(--text-muted)] opacity-50"}`} />
+                              <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${loading ? "bg-muted-var opacity-40" : src.ok ? "bg-emerald-500" : "bg-muted-var opacity-50"}`} />
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="min-w-0">
@@ -1065,7 +1023,7 @@ export default function Home() {
                                     <span className="theme-subtle mx-1 text-[10px]">·</span>
                                     <span className="theme-subtle text-[10px]">{src.url}</span>
                                   </div>
-                                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${loading ? "bg-[var(--surface-chip)] text-[var(--text-muted)]" : src.ok ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-[var(--surface-chip)] text-[var(--text-muted)]"}`}>
+                                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${loading ? "bg-surface-chip-var text-muted-var" : src.ok ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-surface-chip-var text-muted-var"}`}>
                                     {loading ? "—" : src.ok ? "OK" : "N/A"}
                                   </span>
                                 </div>
@@ -1077,7 +1035,7 @@ export default function Home() {
                       </div>
 
                       {/* Server-side / keyed sources */}
-                      <div className="border-t border-[color:var(--border-soft)] pt-3">
+                      <div className="border-soft-var border-t pt-3">
                         <p className="theme-section-label mb-1 text-[11px] font-bold uppercase tracking-wider">Enhanced (server-side)</p>
                         <p className="theme-subtle mb-2 text-[10px]">Falls back gracefully if API keys are not configured.</p>
                         <div className="flex flex-col gap-2">
@@ -1087,7 +1045,7 @@ export default function Home() {
                             { name: "Aviation Weather (METAR)", url: "aviationweather.gov", desc: "Raw observations from the nearest reporting airport", ok: metarConnected },
                           ].map((src) => (
                             <div key={src.name} className="flex items-start gap-2.5">
-                              <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${loading ? "bg-[var(--text-muted)] opacity-40" : src.ok ? "bg-emerald-500" : "bg-amber-500/70"}`} />
+                              <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${loading ? "bg-muted-var opacity-40" : src.ok ? "bg-emerald-500" : "bg-amber-500/70"}`} />
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center justify-between gap-2">
                                   <div className="min-w-0">
@@ -1095,7 +1053,7 @@ export default function Home() {
                                     <span className="theme-subtle mx-1 text-[10px]">·</span>
                                     <span className="theme-subtle text-[10px]">{src.url}</span>
                                   </div>
-                                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${loading ? "bg-[var(--surface-chip)] text-[var(--text-muted)]" : src.ok ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/15 text-amber-600 dark:text-amber-400"}`}>
+                                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${loading ? "bg-surface-chip-var text-muted-var" : src.ok ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/15 text-amber-600 dark:text-amber-400"}`}>
                                     {loading ? "—" : src.ok ? "OK" : "No key"}
                                   </span>
                                 </div>
@@ -1107,7 +1065,7 @@ export default function Home() {
                       </div>
 
                       {/* AI + Privacy */}
-                      <div className="border-t border-[color:var(--border-soft)] pt-3">
+                      <div className="border-soft-var border-t pt-3">
                         <p className="theme-section-label mb-2 text-[11px] font-bold uppercase tracking-wider">AI & Privacy</p>
                         <div className="flex flex-col gap-1.5">
                           <p className="theme-muted text-[10px] leading-relaxed">
@@ -1155,6 +1113,8 @@ export default function Home() {
           weatherData={weather}
           isDetailed={isDetailed}
           onToggleDetail={() => setIsDetailed(!isDetailed)}
+          aiHeroSummary={aiHeroSummary}
+          aiNext24Summary={aiNext24Summary}
           aiAdvice={aiAdvice}
           allPersonalities={allPersonalities}
           personalityId={personality}

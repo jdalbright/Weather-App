@@ -47,7 +47,7 @@
 }
 
 body {
-  overscroll-behavior-y: none;
+  overscroll-behavior-y: auto;
 }
 
 html[data-color-mode="light"] {
@@ -142,7 +142,6 @@ html[data-color-mode="dark"][data-weather-theme="theme-night"] {
 html,
 body {
   max-width: 100vw;
-  overflow-x: hidden;
   min-height: 100vh;
   min-height: 100svh;
   min-height: 100dvh;
@@ -158,6 +157,7 @@ body {
 
 body {
   position: relative;
+  overflow-x: hidden;
 }
 
 body::before {
@@ -192,6 +192,8 @@ body > * {
 
 /* WeatherCard shell: flat/transparent on mobile, card-styled on sm+ */
 .weather-card-shell {
+  position: relative;
+  isolation: isolate;
   background: transparent;
   border-radius: 0;
   box-shadow: none;
@@ -202,12 +204,40 @@ body > * {
 
 @media (min-width: 640px) {
   .weather-card-shell {
-    background: var(--surface-card);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 18%),
+      linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(10, 18, 34, 0.08)),
+      var(--surface-card);
     border-radius: var(--border-radius-large);
-    box-shadow: var(--shadow-strong);
-    padding: 24px;
+    box-shadow:
+      var(--shadow-strong),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    padding: 28px;
     border: 1px solid var(--border-strong);
     backdrop-filter: blur(18px);
+  }
+
+  .weather-card-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at top left, rgba(255, 255, 255, 0.08), transparent 26%),
+      radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.12), transparent 20%);
+    opacity: 0.9;
+    z-index: -1;
+  }
+
+  .weather-card-shell::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: calc(var(--border-radius-large) - 1px);
+    pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    z-index: -1;
   }
 }
 
@@ -233,11 +263,7 @@ body > * {
 
   .weather-card-insight-grid {
     max-width: none;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .weather-card-insight-pill {
-    min-height: 4.5rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .weather-card-mobile-detail-toggle,
@@ -343,6 +369,257 @@ body > * {
 
 .theme-divider {
   border-color: var(--border-soft);
+}
+
+.bg-surface-elevated-var {
+  background: var(--surface-elevated);
+}
+
+.bg-surface-card-strong-var {
+  background: var(--surface-card-strong);
+}
+
+.bg-surface-chip-var {
+  background: var(--surface-chip);
+}
+
+.bg-surface-tile-var {
+  background: var(--surface-tile);
+}
+
+.bg-accent-soft-var {
+  background: var(--accent-soft);
+}
+
+.bg-weather-glow-var {
+  background: var(--weather-glow);
+}
+
+.bg-muted-var {
+  background: var(--text-muted);
+}
+
+.text-primary-var {
+  color: var(--text-primary);
+}
+
+.text-secondary-var {
+  color: var(--text-secondary);
+}
+
+.text-muted-var {
+  color: var(--text-muted);
+}
+
+.text-accent-var {
+  color: var(--accent-text);
+}
+
+.border-soft-var {
+  border-color: var(--border-soft);
+}
+
+.border-strong-var {
+  border-color: var(--border-strong);
+}
+
+.border-accent-var {
+  border-color: var(--accent-border);
+}
+
+.shadow-soft-var {
+  box-shadow: var(--shadow-soft);
+}
+
+.shadow-strong-var {
+  box-shadow: var(--shadow-strong);
+}
+
+.hover-border-strong-var:hover {
+  border-color: var(--border-strong);
+}
+
+.hover-border-accent-var:hover {
+  border-color: var(--accent-border);
+}
+
+.hover-bg-surface-elevated-var:hover {
+  background: var(--surface-elevated);
+}
+
+.hover-bg-surface-card-strong-var:hover {
+  background: var(--surface-card-strong);
+}
+
+.hover-bg-surface-chip-var:hover {
+  background: var(--surface-chip);
+}
+
+.hover-bg-surface-tile-var:hover {
+  background: var(--surface-tile);
+}
+
+.hover-text-primary-var:hover {
+  color: var(--text-primary);
+}
+
+.hover-text-accent-var:hover {
+  color: var(--accent-text);
+}
+
+.focus-border-strong-var:focus {
+  border-color: var(--border-strong);
+}
+
+.focus-bg-surface-elevated-var:focus {
+  background: var(--surface-elevated);
+}
+
+.weather-hero-overlay {
+  background:
+    radial-gradient(circle at top, var(--weather-glow), transparent 42%),
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.08), transparent 22%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 34%);
+}
+
+.weather-card-hero {
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 26%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-card-strong) 94%, transparent), color-mix(in srgb, var(--surface-card) 82%, transparent));
+  box-shadow:
+    0 28px 70px -34px rgba(2, 6, 23, 0.88),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.weather-card-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 44%),
+    radial-gradient(circle at 80% 80%, rgba(56, 189, 248, 0.12), transparent 22%);
+  opacity: 0.9;
+}
+
+.weather-card-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto 24px 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  opacity: 0.8;
+}
+
+.weather-card-insight-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.weather-card-insight-pill {
+  align-items: flex-start;
+  backdrop-filter: blur(16px);
+}
+
+.weather-card-insight-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.95rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.weather-hero-icon-shell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.9rem;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(148, 163, 184, 0.04));
+  box-shadow:
+    0 20px 45px -28px rgba(56, 189, 248, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.weather-hero-icon-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0.35rem;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  opacity: 0.9;
+}
+
+.weather-hero-icon-core {
+  position: relative;
+  z-index: 1;
+}
+
+.weather-hero-temperature {
+  font-size: clamp(4.75rem, 19vw, 7.2rem);
+  line-height: 0.86;
+  letter-spacing: -0.08em;
+}
+
+.weather-hero-degree {
+  font-size: 0.42em;
+  line-height: 1;
+  padding-top: 0.16em;
+  opacity: 0.82;
+}
+
+.weather-hero-location {
+  font-size: clamp(2rem, 8vw, 3.2rem);
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+}
+
+.weather-hero-subtitle {
+  font-size: 0.94rem;
+  letter-spacing: 0.03em;
+}
+
+.weather-hero-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 9999px;
+}
+
+.weather-hero-summary {
+  opacity: 0.88;
+}
+
+.weather-hero-metric {
+  min-width: 0;
+  padding: 0.85rem 0.95rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(15, 23, 42, 0.1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  text-align: left;
+}
+
+.weather-hero-metric-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.personality-card-bg {
+  background:
+    radial-gradient(circle at top left, var(--accent-soft), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.08), transparent 24%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.07), transparent 62%);
 }
 
 @keyframes dropdown-reveal {
@@ -514,4 +791,48 @@ body > * {
 
 ::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--text-secondary) 64%, transparent);
+}
+
+/* Moon Section Styles */
+.moon-phase-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  position: relative;
+}
+
+.moon-glow {
+  position: absolute;
+  inset: -20%;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(253, 224, 71, 0.4), transparent 60%);
+  filter: blur(8px);
+  z-index: 0;
+}
+
+.moon-emoji {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(3.5rem, 10vw, 4.5rem);
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(253, 224, 71, 0.6));
+}
+
+.moon-card {
+  overflow: hidden;
+  position: relative;
+}
+
+.moon-card::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at top right, rgba(234, 179, 8, 0.08), transparent 40%);
+  pointer-events: none;
+  z-index: 0;
 }

@@ -15,6 +15,37 @@ export default function PwaManager() {
 
   useEffect(() => {
     let frameId = 0;
+    const isLocalDev =
+      process.env.NODE_ENV !== 'production' ||
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
+    async function unregisterServiceWorkersForDev() {
+      if (!('serviceWorker' in navigator)) return;
+
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      } catch (err) {
+        console.warn('SW cleanup failed:', err);
+      }
+
+      try {
+        const cacheKeys = await caches.keys();
+        await Promise.all(
+          cacheKeys
+            .filter((key) => key.startsWith('weather-vibe-'))
+            .map((key) => caches.delete(key))
+        );
+      } catch (err) {
+        console.warn('Cache cleanup failed:', err);
+      }
+    }
+
+    if (isLocalDev) {
+      void unregisterServiceWorkersForDev();
+      return () => window.cancelAnimationFrame(frameId);
+    }
 
     // Detect standalone mode (already installed)
     const isStandalone =

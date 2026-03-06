@@ -25,19 +25,7 @@ export default function SearchBar({
 }: SearchBarProps) {
     const [query, setQuery] = useState("");
     const [suggestions, setSuggestions] = useState<GeocodeResult[]>([]);
-    const [recentSearches, setRecentSearches] = useState<GeocodeResult[]>(() => {
-        if (typeof window !== "undefined") {
-            const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
-            if (stored) {
-                try {
-                    return JSON.parse(stored);
-                } catch (e) {
-                    console.error("Failed to parse recent searches", e);
-                }
-            }
-        }
-        return [];
-    });
+    const [recentSearches, setRecentSearches] = useState<GeocodeResult[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -58,6 +46,25 @@ export default function SearchBar({
 
         return () => clearTimeout(handler);
     }, [query]);
+
+    useEffect(() => {
+        let frameId = 0;
+        const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
+        if (!stored) return () => window.cancelAnimationFrame(frameId);
+
+        try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+                frameId = window.requestAnimationFrame(() => {
+                    setRecentSearches(parsed);
+                });
+            }
+        } catch (e) {
+            console.error("Failed to parse recent searches", e);
+        }
+
+        return () => window.cancelAnimationFrame(frameId);
+    }, []);
 
     // Close suggestions when interacting outside
     useEffect(() => {
@@ -151,8 +158,8 @@ export default function SearchBar({
                     placeholder={isCurrentLocation && !query ? (currentLocationName ?? "Current Location") : placeholder}
                     enterKeyHint="done"
                     className={`organic-input h-14 w-full rounded-[24px] border pl-12 pr-24 font-semibold outline-none transition-all ${dropdownOpen
-                        ? "rounded-b-none border-[color:var(--border-strong)] bg-[var(--surface-elevated)]"
-                        : "focus:border-[color:var(--border-strong)] focus:bg-[var(--surface-elevated)]"
+                        ? "rounded-b-none border-strong-var bg-surface-elevated-var"
+                        : "focus-border-strong-var focus-bg-surface-elevated-var"
                         }`}
                 />
                 <div className="absolute right-1.5 flex items-center gap-1">
@@ -160,7 +167,7 @@ export default function SearchBar({
                         <button
                             type="button"
                             onClick={clearSearch}
-                            className="theme-subtle flex h-11 w-11 items-center justify-center rounded-full transition-all hover:bg-[var(--surface-chip)] hover:text-[var(--text-primary)]"
+                            className="theme-subtle flex h-11 w-11 items-center justify-center rounded-full transition-all hover-bg-surface-chip-var hover-text-primary-var"
                             aria-label="Clear search"
                         >
                             <X size={18} />
@@ -181,7 +188,7 @@ export default function SearchBar({
                     className="search-dropdown surface-card absolute top-full z-50 mt-0 max-h-[min(18rem,calc(100dvh-8rem))] w-full overflow-y-auto overscroll-contain rounded-b-[24px] border-t-0 animate-in fade-in duration-200 [-webkit-overflow-scrolling:touch]"
                     onTouchStart={dismissKeyboard}
                 >
-                    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[color:var(--border-soft)] bg-[color:var(--surface-card-strong)] px-4 py-2 backdrop-blur">
+                    <div className="border-soft-var bg-surface-card-strong-var sticky top-0 z-10 flex items-center justify-between border-b px-4 py-2 backdrop-blur">
                         <span className="theme-section-label text-[10px] font-bold tracking-[0.18em]">
                             {query.length >= 2 ? "Suggestions" : "Recent Searches"}
                         </span>
@@ -199,7 +206,7 @@ export default function SearchBar({
                         <div className="p-2 pb-0">
                             <button
                                 onClick={handleCurrentLocation}
-                                className="w-full rounded-xl px-4 py-1 text-left font-medium transition-colors hover:bg-[var(--surface-tile)] text-[var(--accent-text)]"
+                                className="w-full rounded-xl px-4 py-1 text-left font-medium transition-colors text-accent-var hover-bg-surface-tile-var"
                             >
                                 <span className="flex min-h-[52px] items-center gap-3">
                                     <LocateFixed size={16} className="shrink-0" />
@@ -218,7 +225,7 @@ export default function SearchBar({
                                 <button
                                     key={`suggestion-${i}`}
                                     onClick={() => handleSelect(s)}
-                                    className="theme-heading w-full rounded-xl px-4 py-1 text-left font-medium transition-colors hover:bg-[var(--surface-tile)]"
+                                    className="theme-heading w-full rounded-xl px-4 py-1 text-left font-medium transition-colors hover-bg-surface-tile-var"
                                 >
                                     <span className="flex min-h-[52px] items-center gap-3">
                                         <MapPin size={16} className="theme-subtle" />
@@ -236,7 +243,7 @@ export default function SearchBar({
                                 <button
                                     key={`recent-${i}`}
                                     onClick={() => handleSelect(r)}
-                                    className="theme-heading w-full rounded-xl px-4 py-1 text-left font-medium transition-colors hover:bg-[var(--surface-tile)]"
+                                    className="theme-heading w-full rounded-xl px-4 py-1 text-left font-medium transition-colors hover-bg-surface-tile-var"
                                 >
                                     <span className="flex min-h-[52px] items-center gap-3">
                                         <Clock size={16} className="theme-subtle" />

@@ -55,8 +55,8 @@ function renderPersonalityIcon(personalityOption: Personality, active: boolean) 
     <div
       className={`flex h-10 w-10 items-center justify-center rounded-2xl border transition-colors ${
         active
-          ? "border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-text)]"
-          : "surface-chip-muted text-[var(--text-secondary)]"
+          ? "border-accent-var bg-accent-soft-var text-accent-var"
+          : "surface-chip-muted text-secondary-var"
       }`}
     >
       <Icon size={18} />
@@ -99,8 +99,8 @@ export default function VoiceSettingsMenu({
               key={option.id}
               className={`min-w-[224px] snap-start rounded-[24px] border transition-all md:min-w-0 ${
                 isActive
-                  ? "border-[color:var(--accent-border)] bg-[var(--surface-elevated)] shadow-md"
-                  : "surface-tile hover:border-[color:var(--border-strong)] hover:bg-[var(--surface-card-strong)]"
+                  ? "border-accent-var bg-surface-elevated-var shadow-md"
+                  : "surface-tile hover-border-strong-var hover-bg-surface-card-strong-var"
               }`}
             >
               <button
@@ -113,12 +113,12 @@ export default function VoiceSettingsMenu({
                   {renderPersonalityIcon(option, isActive)}
                   <div className="flex flex-wrap justify-end gap-2">
                     {isActive ? (
-                      <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--accent-text)]">
+                      <span className="bg-accent-soft-var text-accent-var rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
                         Active
                       </span>
                     ) : null}
                     {option.isCustom ? (
-                      <span className="rounded-full bg-[var(--surface-chip)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-secondary)]">
+                      <span className="bg-surface-chip-var text-secondary-var rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
                         Custom
                       </span>
                     ) : null}
@@ -138,7 +138,7 @@ export default function VoiceSettingsMenu({
                   <button
                     type="button"
                     onClick={() => onDeleteCustomPersonality(option.id)}
-                    className="theme-subtle min-h-[40px] rounded-full px-3 py-2 text-[11px] font-bold transition-colors hover:bg-[var(--surface-chip)] hover:text-[var(--text-primary)]"
+                    className="theme-subtle min-h-[40px] rounded-full px-3 py-2 text-[11px] font-bold transition-colors hover-bg-surface-chip-var hover-text-primary-var"
                   >
                     Remove
                   </button>
@@ -157,11 +157,11 @@ export default function VoiceSettingsMenu({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="theme-heading text-sm font-bold">{selectedPersonality.label}</span>
-                  <span className="rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--accent-text)]">
+                  <span className="bg-accent-soft-var text-accent-var rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                     Active
                   </span>
                   {selectedPersonality.isCustom ? (
-                    <span className="rounded-full bg-[var(--surface-chip)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--text-secondary)]">
+                    <span className="bg-surface-chip-var text-secondary-var rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                       Custom
                     </span>
                   ) : null}
@@ -195,7 +195,7 @@ export default function VoiceSettingsMenu({
           value={customIdea}
           onChange={(event) => onCustomIdeaChange(event.target.value)}
           placeholder="Try: calm airline captain, overcaffeinated soccer dad, elegant spa concierge..."
-          className="organic-input min-h-[104px] w-full rounded-[20px] border px-4 py-3 text-sm font-medium outline-none transition-all focus:border-[color:var(--border-strong)] focus:bg-[var(--surface-elevated)]"
+          className="organic-input focus-border-strong-var focus-bg-surface-elevated-var min-h-[104px] w-full rounded-[20px] border px-4 py-3 text-sm font-medium outline-none transition-all"
         />
 
         <div className="mt-3 flex items-center justify-between gap-3">

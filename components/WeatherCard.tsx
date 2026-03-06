@@ -99,15 +99,59 @@ const sectionLabelClass = "theme-section-label ml-2 text-sm font-bold";
 const statTileClass = "surface-tile flex items-center gap-3 rounded-2xl p-3";
 const statValueClass = "theme-heading font-semibold";
 const forecastTileClass = "surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center gap-2 rounded-2xl p-3";
-const forecastDayTileClass = "surface-tile flex min-w-[80px] shrink-0 snap-start flex-col items-center justify-between gap-1 rounded-2xl p-3 h-[120px]";
-const heroCardClass = "weather-card-hero surface-card-strong relative overflow-hidden rounded-[32px] px-5 py-6 sm:px-8 sm:py-10";
-const insightGridClass = "weather-card-insight-grid mt-3 grid w-full max-w-[26rem] grid-cols-2 gap-2 sm:max-w-none sm:grid-cols-3 sm:gap-3";
-const insightPillClass = "weather-card-insight-pill flex min-h-[76px] w-full min-w-0 items-center justify-between gap-2 sm:gap-3 rounded-[24px] border border-[color:var(--border-soft)] bg-[var(--surface-chip)] text-[var(--text-secondary)] px-3 sm:px-4 py-3.5 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover:border-[color:var(--border-strong)] hover:shadow-[var(--shadow-soft)]";
-const insightPillOpenClass = "border-[color:var(--accent-border)] bg-[var(--surface-elevated)] shadow-[var(--shadow-soft)]";
-const sectionAccordionButtonClass = "surface-tile flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[24px] px-4 py-3 text-left transition-all hover:border-[color:var(--border-strong)] hover:bg-[var(--surface-elevated)]";
+const heroCardClass = "weather-card-hero surface-card-strong relative overflow-hidden rounded-[32px] px-5 py-6 sm:px-8 sm:py-8";
+const insightGridClass = "weather-card-insight-grid mt-3 grid w-full grid-cols-3 gap-2";
+const insightPillClass = "weather-card-insight-pill flex h-full min-h-[126px] w-full min-w-0 flex-col rounded-[24px] border border-soft-var bg-surface-chip-var px-4 py-3.5 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover-border-strong-var shadow-soft-var";
+const insightPillOpenClass = "border-accent-var bg-surface-elevated-var shadow-soft-var";
+const sectionAccordionButtonClass = "surface-tile flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[24px] px-4 py-3 text-left transition-all hover-border-strong-var hover-bg-surface-elevated-var";
 const MIN_FORECAST_CHANCE_TO_SHOW = 15;
 type DetailSectionId = "forecast" | "conditions" | "extras";
 type SourceSectionId = "hero" | "alerts" | "conditions" | "forecast" | "extras";
+type HourlyForecastPoint = {
+    time: Date;
+    temp: number;
+    iconCode: number;
+    isDay: number;
+    pop: number;
+};
+type ForecastDaypartKey = "overnight" | "morning" | "afternoon" | "evening";
+type ForecastDaypartCard = {
+    key: string;
+    label: string;
+    detail: string;
+    temp: number;
+    low: number;
+    high: number;
+    pop: number;
+    iconCode: number;
+    isDay: number;
+};
+type ForecastTimelineEvent =
+    | {
+        type: "hour";
+        time: Date;
+        temp: number;
+        iconCode: number;
+        isDay: number;
+        pop: number;
+    }
+    | {
+        type: "sunrise" | "sunset";
+        time: Date;
+    };
+type ForecastSummarySolarEvent = {
+    type: "sunrise" | "sunset";
+    label: string;
+};
+type ForecastSummaryCondition =
+    | "clear"
+    | "partly-cloudy"
+    | "cloudy"
+    | "fog"
+    | "light-precip"
+    | "rain"
+    | "snow"
+    | "thunder";
 
 function shouldShowForecastChance(probability: number | null | undefined): probability is number {
     return probability != null && probability >= MIN_FORECAST_CHANCE_TO_SHOW;
@@ -118,11 +162,249 @@ function formatCurrentPrecipChance(probability: number): string {
     return `${probability}%`;
 }
 
+function getForecastDaypartKey(date: Date): ForecastDaypartKey {
+    const hour = date.getHours();
+    if (hour >= 5 && hour < 11) return "morning";
+    if (hour >= 11 && hour < 17) return "afternoon";
+    if (hour >= 17) return "evening";
+    return "overnight";
+}
+
+function getForecastDaypartTitle(daypart: ForecastDaypartKey): string {
+    switch (daypart) {
+        case "morning":
+            return "Morning";
+        case "afternoon":
+            return "Afternoon";
+        case "evening":
+            return "Evening";
+        default:
+            return "Overnight";
+    }
+}
+
+function getForecastDaypartLabel(date: Date, now: Date, daypart: ForecastDaypartKey): { label: string; detail: string } {
+    const todayKey = format(now, "yyyy-MM-dd");
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowKey = format(tomorrow, "yyyy-MM-dd");
+    const dateKey = format(date, "yyyy-MM-dd");
+    const title = getForecastDaypartTitle(daypart);
+
+    if (dateKey === todayKey) {
+        if (daypart === "evening") {
+            return {
+                label: "Tonight",
+                detail: "This evening",
+            };
+        }
+
+        if (daypart === "overnight") {
+            return {
+                label: "Overnight",
+                detail: "Early today",
+            };
+        }
+
+        return {
+            label: title,
+            detail: "Today",
+        };
+    }
+
+    if (dateKey === tomorrowKey) {
+        if (daypart === "overnight") {
+            return {
+                label: "Overnight",
+                detail: "Late tonight",
+            };
+        }
+
+        return {
+            label: title,
+            detail: "Tomorrow",
+        };
+    }
+
+    return {
+        label: title,
+        detail: format(date, "EEE"),
+    };
+}
+
+function buildForecastDaypartCards(points: HourlyForecastPoint[], now: Date): ForecastDaypartCard[] {
+    const buckets = new Map<string, HourlyForecastPoint[]>();
+
+    points.forEach((point) => {
+        const daypart = getForecastDaypartKey(point.time);
+        const key = `${format(point.time, "yyyy-MM-dd")}-${daypart}`;
+        const current = buckets.get(key) ?? [];
+        current.push(point);
+        buckets.set(key, current);
+    });
+
+    return Array.from(buckets.entries()).slice(0, 4).map(([key, bucket]) => {
+        const temps = bucket.map(({ temp }) => temp);
+        const highestPopPoint = bucket.reduce((best, point) => (
+            point.pop >= best.pop ? point : best
+        ), bucket[0]);
+        const labelData = getForecastDaypartLabel(
+            bucket[0].time,
+            now,
+            getForecastDaypartKey(bucket[0].time),
+        );
+
+        return {
+            key,
+            label: labelData.label,
+            detail: labelData.detail,
+            temp: Math.round(temps.reduce((sum, value) => sum + value, 0) / temps.length),
+            low: Math.round(Math.min(...temps)),
+            high: Math.round(Math.max(...temps)),
+            pop: Math.round(Math.max(...bucket.map(({ pop }) => pop))),
+            iconCode: highestPopPoint.iconCode,
+            isDay: highestPopPoint.isDay,
+        };
+    });
+}
+
+function buildNext24HourSummary(args: {
+    dayparts: ForecastDaypartCard[];
+    high: number;
+    low: number;
+    peakPop: number;
+    peakTimeLabel: string | null;
+    solarEvent: ForecastSummarySolarEvent | null;
+}): string {
+    const { dayparts, high, low, peakPop, peakTimeLabel, solarEvent } = args;
+    const firstDaypart = dayparts[0] ?? null;
+    const firstCondition = firstDaypart ? getSummaryConditionGroup(firstDaypart.iconCode) : null;
+    const nextDifferentDaypart = firstCondition
+        ? dayparts.slice(1).find((daypart) => getSummaryConditionGroup(daypart.iconCode) !== firstCondition) ?? null
+        : null;
+
+    const timingSentence = getNext24TimingSummary(firstDaypart, nextDifferentDaypart);
+    const temperatureSentence = `Temperatures range from ${low}° to ${high}°.`;
+    const solarSentence = solarEvent
+        ? `${solarEvent.type === "sunset" ? "Sunset" : "Sunrise"} is at ${solarEvent.label}.`
+        : null;
+
+    if (peakPop >= 60 && peakTimeLabel) {
+        return `${timingSentence} The strongest precipitation signal arrives near ${peakTimeLabel}. ${temperatureSentence}`;
+    }
+
+    if (peakPop >= 30) {
+        return `${timingSentence} A passing precipitation chance shows up later. ${temperatureSentence}`;
+    }
+
+    return [timingSentence, temperatureSentence, solarSentence].filter(Boolean).join(" ");
+}
+
+function getSummaryConditionGroup(code: number): ForecastSummaryCondition {
+    if (code >= 95) return "thunder";
+    if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return "snow";
+    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return "rain";
+    if (code >= 51 && code <= 57) return "light-precip";
+    if (code === 45 || code === 48) return "fog";
+    if (code === 3) return "cloudy";
+    if (code === 2) return "partly-cloudy";
+    return "clear";
+}
+
+function getSummaryConditionLabel(condition: ForecastSummaryCondition): string {
+    switch (condition) {
+        case "partly-cloudy":
+            return "partly cloudy skies";
+        case "cloudy":
+            return "overcast skies";
+        case "fog":
+            return "fog";
+        case "light-precip":
+            return "light precipitation chances";
+        case "rain":
+            return "rain chances";
+        case "snow":
+            return "snow chances";
+        case "thunder":
+            return "thunderstorm chances";
+        default:
+            return "clear skies";
+    }
+}
+
+function getDaypartSummaryTiming(daypart: ForecastDaypartCard): string {
+    if (daypart.detail === "This evening") return "this evening";
+    if (daypart.detail === "Late tonight") return "late tonight";
+    if (daypart.detail === "Today") return `today ${daypart.label.toLowerCase()}`;
+    if (daypart.detail === "Tomorrow") return `tomorrow ${daypart.label.toLowerCase()}`;
+    return daypart.detail.toLowerCase();
+}
+
+function capitalizeSentence(value: string): string {
+    if (!value) return value;
+    return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function getNext24TimingSummary(
+    firstDaypart: ForecastDaypartCard | null,
+    nextDifferentDaypart: ForecastDaypartCard | null,
+): string {
+    if (!firstDaypart) {
+        return "Conditions stay fairly steady through the next 24 hours.";
+    }
+
+    const firstLabel = getSummaryConditionLabel(getSummaryConditionGroup(firstDaypart.iconCode));
+    const firstTiming = getDaypartSummaryTiming(firstDaypart);
+
+    if (!nextDifferentDaypart) {
+        return `${capitalizeSentence(firstLabel)} hold through the next 24 hours.`;
+    }
+
+    const nextLabel = getSummaryConditionLabel(getSummaryConditionGroup(nextDifferentDaypart.iconCode));
+    const nextTiming = getDaypartSummaryTiming(nextDifferentDaypart);
+
+    return `${capitalizeSentence(firstLabel)} ${firstTiming}, then shift to ${nextLabel} by ${nextTiming}.`;
+}
+
+function getNext24HourSolarEvent(
+    sunriseValues: string[] | undefined,
+    sunsetValues: string[] | undefined,
+    windowStart: Date,
+    windowEnd: Date,
+): ForecastSummarySolarEvent | null {
+    const events: Array<{ type: "sunrise" | "sunset"; time: Date }> = [];
+
+    sunriseValues?.forEach((value) => {
+        const time = parseLocationDateTime(value);
+        if (time >= windowStart && time <= windowEnd) {
+            events.push({ type: "sunrise", time });
+        }
+    });
+
+    sunsetValues?.forEach((value) => {
+        const time = parseLocationDateTime(value);
+        if (time >= windowStart && time <= windowEnd) {
+            events.push({ type: "sunset", time });
+        }
+    });
+
+    events.sort((a, b) => a.time.getTime() - b.time.getTime());
+
+    if (events.length === 0) return null;
+
+    return {
+        type: events[0].type,
+        label: format(events[0].time, "h:mm a"),
+    };
+}
+
 type WeatherCardProps = {
     locationName: string,
     weatherData: WeatherData | null,
     isDetailed: boolean,
     onToggleDetail: () => void,
+    aiHeroSummary: string,
+    aiNext24Summary: string,
     aiAdvice: string,
     allPersonalities: Personality[],
     personalityId: string,
@@ -158,6 +440,8 @@ export default function WeatherCard({
     weatherData,
     isDetailed,
     onToggleDetail,
+    aiHeroSummary,
+    aiNext24Summary,
     aiAdvice,
     allPersonalities,
     personalityId,
@@ -207,8 +491,11 @@ export default function WeatherCard({
     const IconComponent = iconConfig.icon;
     const isNightIcon = iconName === "moon" || iconName === "cloud-moon";
     const iconBadgeClass = isNightIcon
-        ? "bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.18),_rgba(255,255,255,0.02)_40%),linear-gradient(160deg,_#0f172a,_#1e3a5f_55%,_#312e81)] shadow-[0_16px_36px_rgba(15,23,42,0.28)] ring-1 ring-white/20"
-        : "bg-[radial-gradient(circle_at_top,_#ffffff,_#f8fafc_55%,_#e2e8f0)] shadow-[0_10px_22px_rgba(148,163,184,0.25)] ring-1 ring-white/70";
+        ? "shadow-[0_16px_36px_rgba(15,23,42,0.28)] ring-1 ring-white/20"
+        : "shadow-[0_10px_22px_rgba(148,163,184,0.25)] ring-1 ring-white/70";
+    const iconBadgeStyle = isNightIcon
+        ? { background: "radial-gradient(circle at top, rgba(255,255,255,0.18), rgba(255,255,255,0.02) 40%), linear-gradient(160deg, #0f172a, #1e3a5f 55%, #312e81)" }
+        : { background: "radial-gradient(circle at top, #ffffff, #f8fafc 55%, #e2e8f0)" };
     const iconSize = isNightIcon ? 88 : 84;
     const PersonalityIcon = PersonalityIconMap[selectedPersonality.icon];
 
@@ -306,14 +593,14 @@ export default function WeatherCard({
     const showMinutelyBanner = Boolean(rainSummary?.summary || minutelyTimeline.length > 0);
     const minutelyBannerClass = rainSummary?.isRaining
         ? "bg-blue-50/80 border-blue-200 text-blue-800"
-        : "surface-tile text-[var(--text-secondary)]";
-    const minutelyIconClass = rainSummary?.isRaining ? "text-blue-500" : "text-[var(--text-muted)]";
+        : "surface-tile text-secondary-var";
+    const minutelyIconClass = rainSummary?.isRaining ? "text-blue-500" : "text-muted-var";
     const minutelyBadgeClass = rainSummary?.isRaining
         ? "border-blue-200 bg-blue-50 text-blue-700"
         : "surface-chip";
     const minutelyPillToneClass = rainSummary?.isRaining
         ? "border-blue-200 bg-blue-50 text-blue-700"
-        : "border-[color:var(--border-soft)] bg-[var(--surface-chip)] text-[var(--text-secondary)]";
+        : "border-soft-var bg-surface-chip-var text-secondary-var";
     const minutelyStatusLabel = rainSummary?.isRaining ? "Rain signal" : "No rain signal";
     const minutelyWindowLabel = "Next-hour trend";
     const minutelySummaryText = rainSummary?.summary ?? "No precipitation expected in the next hour.";
@@ -322,11 +609,32 @@ export default function WeatherCard({
         : "Flat bars mean no meaningful precip signal";
     const maxMinutelyIntensity = minutelyTimeline.reduce((max, point) => Math.max(max, point.precip_intensity), 0);
     const peakMinutelyChance = Math.round(Math.max(...minutelyTimeline.map((point) => point.precip_probability), 0) * 100);
+    const minutelyPeakLabel = peakMinutelyChance > 0 ? `${peakMinutelyChance}% peak` : "Peak 0%";
     const currentPrecipChanceLabel = formatCurrentPrecipChance(current.precipitation_probability);
     const hasConfidencePill = Boolean(conf && forecastConfidence);
     const hasStationPill = metarTempDisplay != null;
     const hasMinutelyPill = Boolean(showMinutelyBanner && rainSummary);
     const stationNeedsAttention = showStationTempDelta && metarTempDiff != null && Math.abs(metarTempDiff) >= 3;
+    const heroMetrics = [
+        {
+            label: "Feels like",
+            value: `${feelsLike}\u00B0`,
+            icon: Thermometer,
+            iconClassName: "text-orange-400",
+        },
+        {
+            label: "Humidity",
+            value: `${current.relative_humidity_2m}%`,
+            icon: Droplets,
+            iconClassName: "text-cyan-400",
+        },
+        {
+            label: "Wind",
+            value: formatWindSpeed(current.wind_speed_10m, weatherData.current_units.wind_speed_10m),
+            icon: Wind,
+            iconClassName: "text-sky-400",
+        },
+    ];
 
     const sourceEntries = [
         {
@@ -420,6 +728,116 @@ export default function WeatherCard({
     const locationSegments = locationName.split(",").map((segment) => segment.trim()).filter(Boolean);
     const primaryLocationName = locationSegments[0] || locationName || "Current Location";
     const secondaryLocationName = locationSegments.length > 1 ? locationSegments.slice(1, 3).join(" · ") : null;
+    const nowMinusOneHour = new Date(localTimestamp.getTime() - 3600000);
+    const twelveHoursAhead = new Date(localTimestamp.getTime() + 12 * 3600000);
+    const twentyFourHoursAhead = new Date(localTimestamp.getTime() + 24 * 3600000);
+    const upcomingHourlyPoints = weatherData.hourly.time.slice(0, 48).flatMap((timeString: string, index: number) => {
+        const hourDate = parseLocationDateTime(timeString);
+        if (hourDate < nowMinusOneHour || hourDate > twentyFourHoursAhead) {
+            return [];
+        }
+
+        return [{
+            time: hourDate,
+            temp: Math.round(weatherData.hourly.temperature_2m[index]),
+            iconCode: weatherData.hourly.weather_code[index],
+            isDay: weatherData.hourly.is_day[index],
+            pop: weatherData.hourly.precipitation_probability?.[index] ?? 0,
+        }];
+    });
+    const nextTwelveHourEvents: ForecastTimelineEvent[] = upcomingHourlyPoints
+        .filter((point) => point.time <= twelveHoursAhead)
+        .map((point) => ({
+            type: "hour" as const,
+            time: point.time,
+            temp: point.temp,
+            iconCode: point.iconCode,
+            isDay: point.isDay,
+            pop: point.pop,
+        }));
+
+    weatherData.daily.time.slice(0, 3).forEach((_: string, index: number) => {
+        const sunriseStr = weatherData.daily.sunrise?.[index];
+        const sunsetStr = weatherData.daily.sunset?.[index];
+        if (sunriseStr) {
+            const sunriseDate = parseLocationDateTime(sunriseStr);
+            if (sunriseDate >= localTimestamp && sunriseDate <= twelveHoursAhead) {
+                nextTwelveHourEvents.push({ type: "sunrise", time: sunriseDate });
+            }
+        }
+        if (sunsetStr) {
+            const sunsetDate = parseLocationDateTime(sunsetStr);
+            if (sunsetDate >= localTimestamp && sunsetDate <= twelveHoursAhead) {
+                nextTwelveHourEvents.push({ type: "sunset", time: sunsetDate });
+            }
+        }
+    });
+
+    nextTwelveHourEvents.sort((a, b) => a.time.getTime() - b.time.getTime());
+
+    const next24HourlyPoints = upcomingHourlyPoints.filter((point) => point.time >= localTimestamp);
+    const nextDaypartCards = buildForecastDaypartCards(
+        next24HourlyPoints,
+        localTimestamp,
+    );
+    const next24Temps = next24HourlyPoints.map(({ temp }) => temp);
+    const next24High = next24Temps.length > 0 ? Math.max(...next24Temps) : dailyHigh;
+    const next24Low = next24Temps.length > 0 ? Math.min(...next24Temps) : dailyLow;
+    const peakPrecipPoint = next24HourlyPoints
+        .reduce<HourlyForecastPoint | null>((best, point) => {
+            if (!best || point.pop >= best.pop) {
+                return point;
+            }
+            return best;
+        }, null);
+    const peakPrecipChance = peakPrecipPoint?.pop ?? current.precipitation_probability;
+    const next24SolarEvent = getNext24HourSolarEvent(
+        weatherData.daily.sunrise?.slice(0, 3),
+        weatherData.daily.sunset?.slice(0, 3),
+        localTimestamp,
+        twentyFourHoursAhead,
+    );
+    const next24Summary = buildNext24HourSummary({
+        dayparts: nextDaypartCards,
+        high: next24High,
+        low: next24Low,
+        peakPop: peakPrecipChance,
+        peakTimeLabel: peakPrecipPoint ? format(peakPrecipPoint.time, "h a") : null,
+        solarEvent: next24SolarEvent,
+    });
+    const heroSummary = aiHeroSummary.trim()
+        ? aiHeroSummary.trim()
+        : next24Summary;
+    const next24SectionSummary = aiNext24Summary.trim()
+        ? aiNext24Summary.trim()
+        : next24Summary;
+    const tenDayForecast = weatherData.daily.time.slice(0, 10).map((timeString: string, index: number) => {
+        const dayDate = parseLocationDate(timeString);
+        const dayCode = weatherData.daily.weather_code[index];
+        const dayHigh = Math.round(weatherData.daily.temperature_2m_max[index]);
+        const dayLow = Math.round(weatherData.daily.temperature_2m_min[index]);
+        const dayPrecipProbability = weatherData.daily.precipitation_probability_max?.[index] ?? 0;
+        const dayRainTotal = (weatherData.daily.rain_sum?.[index] ?? 0) + (weatherData.daily.showers_sum?.[index] ?? 0);
+        const daySnowfallTotal = weatherData.daily.snowfall_sum?.[index] ?? 0;
+        const showRainChance = shouldShowForecastChance(dayPrecipProbability)
+            && dayRainTotal > 0
+            && daySnowfallTotal === 0
+            && isLiquidPrecipitationCode(dayCode);
+
+        return {
+            key: timeString,
+            label: index === 0 ? "Today" : format(dayDate, "EEE"),
+            subLabel: index === 0 ? format(dayDate, "MMM d") : format(dayDate, "MMM d"),
+            dayCode,
+            dayHigh,
+            dayLow,
+            dayPrecipProbability,
+            showRainChance,
+        };
+    });
+    const tenDayMin = Math.min(...tenDayForecast.map(({ dayLow }) => dayLow));
+    const tenDayMax = Math.max(...tenDayForecast.map(({ dayHigh }) => dayHigh));
+    const tenDaySpread = Math.max(tenDayMax - tenDayMin, 1);
     const toggleDetailSection = (section: DetailSectionId) => {
         setOpenDetailSections((current) => ({
             ...current,
@@ -615,152 +1033,177 @@ export default function WeatherCard({
                 >
                     <div className="min-w-0">
                         <p className="theme-heading text-sm font-bold">Forecast Flow</p>
-                        <p className="theme-muted text-xs">Hourly and multi-day outlook with swipe cues.</p>
+                        <p className="theme-muted text-xs">24-hour rhythm and a temperature-range outlook for the next 10 days.</p>
                     </div>
                     <ChevronDown className={`theme-subtle h-5 w-5 shrink-0 transition-transform ${openDetailSections.forecast ? "rotate-180" : ""}`} />
                 </button>
                 <CollapsiblePanel open={openDetailSections.forecast} className="w-full">
                     <div className="flex flex-col gap-6 pt-2">
-                        <div className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between">
-                                <span className={sectionLabelClass}>Hourly Forecast</span>
-                                <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
-                                    Swipe
-                                </span>
-                            </div>
-                            <div className="scroll-fade-horizontal">
-                                <div className="flex overflow-x-auto gap-3 px-2 pb-4 pt-2 snap-x hide-scrollbar">
-                                    {(() => {
-                                        const localNow = getLocalTimeForOffset(weatherData.utc_offset_seconds);
-                                        const oneHourAgo = new Date(localNow.getTime() - 3600000);
-                                        const twelveHoursFromNow = new Date(localNow.getTime() + 12 * 3600000);
-                                        const events: {
-                                            type: "hour" | "sunrise" | "sunset";
-                                            time: Date;
-                                            temp?: number;
-                                            iconCode?: number;
-                                            isDay?: number;
-                                            pop?: number;
-                                        }[] = [];
+                        <div className="surface-tile rounded-[28px] p-4 sm:p-5">
+                            <div className="flex flex-col gap-4">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="min-w-0">
+                                        <span className={sectionLabelClass}>Next 24 Hours</span>
+                                        <p className="theme-heading mt-2 text-xl font-bold sm:text-2xl">
+                                            {next24SectionSummary}
+                                        </p>
+                                    </div>
+                                    <div className="surface-chip shrink-0 rounded-full px-3 py-1.5 text-right">
+                                        <p className="theme-section-label text-[10px] font-bold">Swing</p>
+                                        <p className="theme-heading text-sm font-bold">{next24Low}&deg; to {next24High}&deg;</p>
+                                    </div>
+                                </div>
 
-                                        weatherData.hourly.time.slice(0, 48).forEach((timeString: string, index: number) => {
-                                            const hourDate = parseLocationDateTime(timeString);
-                                            if (hourDate >= oneHourAgo && hourDate <= twelveHoursFromNow) {
-                                                events.push({
-                                                    type: "hour",
-                                                    time: hourDate,
-                                                    temp: Math.round(weatherData.hourly.temperature_2m[index]),
-                                                    iconCode: weatherData.hourly.weather_code[index],
-                                                    isDay: weatherData.hourly.is_day[index],
-                                                    pop: weatherData.hourly.precipitation_probability?.[index]
-                                                });
-                                            }
-                                        });
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                    {nextDaypartCards.map((daypart) => {
+                                        const daypartIconName = getWeatherIconFromCode(daypart.iconCode, daypart.isDay);
+                                        const daypartIconConfig = IconMap[daypartIconName] || IconMap.cloud;
+                                        const DaypartIcon = daypartIconConfig.icon;
 
-                                        weatherData.daily.time.slice(0, 3).forEach((_: string, index: number) => {
-                                            const sunriseStr = weatherData.daily.sunrise?.[index];
-                                            const sunsetStr = weatherData.daily.sunset?.[index];
-                                            if (sunriseStr) {
-                                                const sunriseDate = parseLocationDateTime(sunriseStr);
-                                                if (sunriseDate >= localNow && sunriseDate <= twelveHoursFromNow) {
-                                                    events.push({ type: "sunrise", time: sunriseDate });
-                                                }
-                                            }
-                                            if (sunsetStr) {
-                                                const sunsetDate = parseLocationDateTime(sunsetStr);
-                                                if (sunsetDate >= localNow && sunsetDate <= twelveHoursFromNow) {
-                                                    events.push({ type: "sunset", time: sunsetDate });
-                                                }
-                                            }
-                                        });
-
-                                        events.sort((a, b) => a.time.getTime() - b.time.getTime());
-
-                                        return events.map((event, idx) => {
-                                            if (event.type === "hour") {
-                                                const hIconName = getWeatherIconFromCode(event.iconCode ?? 0, event.isDay ?? 1);
-                                                const hourlyIconConfig = IconMap[hIconName] || IconMap["cloud"];
-                                                const HIcon = hourlyIconConfig.icon;
-                                                return (
-                                                    <div key={`hour-${idx}`} className={forecastTileClass}>
-                                                        <span className="font-semibold text-sm">{format(event.time, "h a")}</span>
-                                                        <HIcon
-                                                            size={24}
-                                                            strokeWidth={hourlyIconConfig.strokeWidth ?? 1.9}
-                                                            className={hourlyIconConfig.className}
-                                                        />
-                                                        <div className="flex flex-col items-center">
-                                                            <span className="font-bold">{event.temp}&deg;</span>
-                                                            {shouldShowForecastChance(event.pop) && (
-                                                                <span className="text-[10px] font-bold text-blue-500">{event.pop}%</span>
-                                                            )}
-                                                        </div>
+                                        return (
+                                            <div key={daypart.key} className="surface-tile-strong rounded-[22px] p-3">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div>
+                                                        <p className="theme-heading text-sm font-bold">{daypart.label}</p>
+                                                        <p className="theme-muted text-xs">{daypart.detail}</p>
                                                     </div>
-                                                );
-                                            }
-
-                                            if (event.type === "sunrise") {
-                                                return (
-                                                    <div key={`sunrise-${idx}`} className="surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-orange-200/70 bg-gradient-to-t from-orange-200/55 to-[var(--surface-card-strong)] p-3">
-                                                        <span className="font-semibold text-sm">{format(event.time, "h:mm")}</span>
-                                                        <Sunrise size={24} className="text-orange-500" />
-                                                        <span className="font-bold text-xs">Sunrise</span>
-                                                    </div>
-                                                );
-                                            }
-
-                                            return (
-                                                <div key={`sunset-${idx}`} className="surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-indigo-200/70 bg-gradient-to-t from-indigo-200/40 to-[var(--surface-card-strong)] p-3">
-                                                    <span className="font-semibold text-sm">{format(event.time, "h:mm")}</span>
-                                                    <Sunset size={24} className="text-indigo-500" />
-                                                    <span className="font-bold text-xs">Sunset</span>
+                                                    <DaypartIcon
+                                                        size={22}
+                                                        strokeWidth={daypartIconConfig.strokeWidth ?? 1.9}
+                                                        className={daypartIconConfig.className}
+                                                    />
                                                 </div>
-                                            );
-                                        });
-                                    })()}
+                                                <div className="mt-4 flex items-end justify-between gap-3">
+                                                    <div>
+                                                        <p className="theme-heading text-2xl font-bold leading-none">{daypart.temp}&deg;</p>
+                                                        <p className="theme-muted mt-1 text-xs">{daypart.low}&deg; / {daypart.high}&deg;</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="theme-section-label text-[10px] font-bold">Rain</p>
+                                                        <p className={`text-sm font-bold ${shouldShowForecastChance(daypart.pop) ? "text-blue-500" : "theme-muted"}`}>
+                                                            {daypart.pop}%
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
 
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center justify-between">
-                                <span className={sectionLabelClass}>16-Day Forecast</span>
+                                <span className={sectionLabelClass}>Next 12 Hours</span>
                                 <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
                                     Swipe
                                 </span>
                             </div>
                             <div className="scroll-fade-horizontal">
                                 <div className="flex overflow-x-auto gap-3 px-2 pb-4 pt-2 snap-x hide-scrollbar">
-                                    {weatherData.daily.time.slice(0, 16).map((timeString: string, index: number) => {
-                                        const dayDate = parseLocationDate(timeString);
-                                        const dayCode = weatherData.daily.weather_code[index];
-                                        const dayHigh = Math.round(weatherData.daily.temperature_2m_max[index]);
-                                        const dayLow = Math.round(weatherData.daily.temperature_2m_min[index]);
-                                        const dayPrecipProbability = weatherData.daily.precipitation_probability_max?.[index] ?? 0;
-                                        const dayRainTotal = (weatherData.daily.rain_sum?.[index] ?? 0) + (weatherData.daily.showers_sum?.[index] ?? 0);
-                                        const daySnowfallTotal = weatherData.daily.snowfall_sum?.[index] ?? 0;
-                                        const showRainChance = shouldShowForecastChance(dayPrecipProbability)
-                                            && dayRainTotal > 0
-                                            && daySnowfallTotal === 0
-                                            && isLiquidPrecipitationCode(dayCode);
-                                        const dIconName = getWeatherIconFromCode(dayCode, 1);
-                                        const dailyIconConfig = IconMap[dIconName] || IconMap["cloud"];
-                                        const DIcon = dailyIconConfig.icon;
+                                    {nextTwelveHourEvents.map((event, idx) => {
+                                        if (event.type === "hour") {
+                                            const hIconName = getWeatherIconFromCode(event.iconCode, event.isDay);
+                                            const hourlyIconConfig = IconMap[hIconName] || IconMap["cloud"];
+                                            const HIcon = hourlyIconConfig.icon;
+                                            return (
+                                                <div key={`hour-${idx}`} className={forecastTileClass}>
+                                                    <span className="font-semibold text-sm">{idx === 0 ? "Now" : format(event.time, "h a")}</span>
+                                                    <HIcon
+                                                        size={24}
+                                                        strokeWidth={hourlyIconConfig.strokeWidth ?? 1.9}
+                                                        className={hourlyIconConfig.className}
+                                                    />
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="font-bold">{event.temp}&deg;</span>
+                                                        {shouldShowForecastChance(event.pop) && (
+                                                            <span className="text-[10px] font-bold text-blue-500">{event.pop}%</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+
+                                        if (event.type === "sunrise") {
+                                            return (
+                                                <div
+                                                    key={`sunrise-${idx}`}
+                                                    className="surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-orange-200/70 p-3"
+                                                    style={{ backgroundImage: "linear-gradient(to top, rgba(254, 215, 170, 0.55), var(--surface-card-strong))" }}
+                                                >
+                                                    <span className="font-semibold text-sm">{format(event.time, "h:mm")}</span>
+                                                    <Sunrise size={24} className="text-orange-500" />
+                                                    <span className="font-bold text-xs">Sunrise</span>
+                                                </div>
+                                            );
+                                        }
 
                                         return (
-                                            <div key={timeString} className={forecastDayTileClass}>
-                                                <span className="font-semibold text-sm">{index === 0 ? "Today" : format(dayDate, "MMM d")}</span>
+                                            <div
+                                                key={`sunset-${idx}`}
+                                                className="surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-indigo-200/70 p-3"
+                                                style={{ backgroundImage: "linear-gradient(to top, rgba(199, 210, 254, 0.4), var(--surface-card-strong))" }}
+                                            >
+                                                <span className="font-semibold text-sm">{format(event.time, "h:mm")}</span>
+                                                <Sunset size={24} className="text-indigo-500" />
+                                                <span className="font-bold text-xs">Sunset</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                                <span className={sectionLabelClass}>10-Day Outlook</span>
+                                <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
+                                    Range View
+                                </span>
+                            </div>
+                            <div className="surface-tile rounded-[28px] p-3 sm:p-4">
+                                <div className="flex flex-col divide-y divide-[color:var(--border-soft)]">
+                                    {tenDayForecast.map((day) => {
+                                        const dIconName = getWeatherIconFromCode(day.dayCode, 1);
+                                        const dailyIconConfig = IconMap[dIconName] || IconMap.cloud;
+                                        const DIcon = dailyIconConfig.icon;
+                                        const offset = ((day.dayLow - tenDayMin) / tenDaySpread) * 100;
+                                        const width = Math.max(((day.dayHigh - day.dayLow) / tenDaySpread) * 100, 10);
+
+                                        return (
+                                            <div key={day.key} className="grid grid-cols-[minmax(0,1.25fr)_auto_minmax(110px,1fr)_auto] items-center gap-3 py-3 first:pt-1 last:pb-1">
+                                                <div className="min-w-0">
+                                                    <p className="theme-heading text-sm font-bold">{day.label}</p>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="theme-muted text-xs">{day.subLabel}</p>
+                                                        {day.showRainChance && (
+                                                            <span className="text-[11px] font-bold text-blue-500">{day.dayPrecipProbability}% rain</span>
+                                                        )}
+                                                    </div>
+                                                </div>
                                                 <DIcon
-                                                    size={28}
+                                                    size={22}
                                                     strokeWidth={dailyIconConfig.strokeWidth ?? 1.9}
-                                                    className={`${dailyIconConfig.className} my-1 flex-shrink-0`}
+                                                    className={dailyIconConfig.className}
                                                 />
-                                                {showRainChance && (
-                                                    <span className="text-[10px] font-bold text-blue-500 -mt-1 mb-1">{dayPrecipProbability}%</span>
-                                                )}
-                                                <div className="flex items-center gap-2 text-xs font-bold w-full justify-between">
-                                                    <span className="theme-muted font-medium">{dayLow}&deg;</span>
-                                                    <span>{dayHigh}&deg;</span>
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="theme-muted w-9 text-right text-sm font-semibold">{day.dayLow}&deg;</span>
+                                                    <div
+                                                        className="relative h-3 flex-1 rounded-full"
+                                                        style={{ background: "color-mix(in srgb, var(--surface-elevated) 82%, transparent)" }}
+                                                    >
+                                                        <div
+                                                            className="absolute top-0 h-3 rounded-full bg-[linear-gradient(90deg,rgba(56,189,248,0.95),rgba(251,146,60,0.92))] shadow-[0_0_0_1px_rgba(255,255,255,0.14)_inset]"
+                                                            style={{
+                                                                left: `${offset}%`,
+                                                                width: `${Math.min(width, 100 - offset)}%`,
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <span className="theme-heading w-9 text-sm font-bold">{day.dayHigh}&deg;</span>
+                                                </div>
+                                                <div className="surface-chip hidden min-w-[70px] justify-center rounded-full px-2 py-1 text-[11px] font-bold sm:flex">
+                                                    {getWeatherDescriptionFromCode(day.dayCode)}
                                                 </div>
                                             </div>
                                         );
@@ -789,25 +1232,37 @@ export default function WeatherCard({
                         {astronomy && (
                             <div className="flex flex-col gap-2">
                                 <span className={sectionLabelClass}>Moon</span>
-                                <div className="surface-tile rounded-2xl p-4 flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-5xl leading-none">{getMoonPhaseEmoji(astronomy.moon_phase)}</span>
-                                        <div>
-                                            <p className="theme-heading font-bold">{astronomy.moon_phase}</p>
-                                            <p className="theme-muted text-xs">{astronomy.moon_illumination}% illuminated</p>
+                                <div className="moon-card surface-tile rounded-[24px] p-5 sm:p-6 flex flex-col sm:flex-row items-center sm:items-stretch justify-between gap-6 border border-amber-200/20 bg-gradient-to-br from-[var(--surface-tile-strong)] to-[var(--surface-tile)] shadow-[0_8px_32px_-12px_rgba(234,179,8,0.12)]">
+                                    <div className="flex items-center gap-5 relative z-10 w-full sm:w-auto">
+                                        <div className="moon-phase-container w-20 h-20 sm:w-24 sm:h-24 shrink-0 bg-[#0f172a]/70 border border-white/10 shadow-inner">
+                                            <div className="moon-glow" />
+                                            <span className="moon-emoji">{getMoonPhaseEmoji(astronomy.moon_phase)}</span>
+                                        </div>
+                                        <div className="flex flex-col justify-center min-w-0">
+                                            <p className="theme-subtle text-[10px] font-bold uppercase tracking-[0.2em] mb-1">Lunar Phase</p>
+                                            <p className="theme-heading text-xl sm:text-2xl font-bold leading-tight">{astronomy.moon_phase}</p>
+                                            <div className="flex items-center gap-2 mt-1.5">
+                                                <div className="w-16 h-1.5 rounded-full bg-[var(--surface-card-strong)] overflow-hidden shadow-inner shrink-0">
+                                                    <div className="h-full bg-gradient-to-r from-amber-200 to-yellow-400 rounded-full" style={{ width: `${Math.round(astronomy.moon_illumination)}%` }} />
+                                                </div>
+                                                <p className="theme-muted text-xs font-semibold">{Math.round(astronomy.moon_illumination)}% illuminated</p>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="flex flex-col gap-1 text-right text-sm">
+                                    <div className="flex sm:flex-col items-center sm:items-end justify-around w-full sm:w-auto gap-4 sm:gap-2 relative z-10 px-4 sm:px-0 py-3 sm:py-0 rounded-2xl sm:rounded-none bg-[var(--surface-card)] sm:bg-transparent border sm:border-none border-[var(--border-soft)] shadow-sm sm:shadow-none">
                                         {astronomy.moonrise && astronomy.moonrise !== "No moonrise" && (
-                                            <div className="flex items-center gap-1 justify-end">
-                                                <span className="theme-muted text-xs">Rise</span>
-                                                <span className="font-semibold">{astronomy.moonrise}</span>
+                                            <div className="flex flex-col items-center sm:items-end gap-0.5">
+                                                <span className="theme-muted text-[10px] font-bold uppercase tracking-[0.16em]">Rise</span>
+                                                <span className="theme-heading text-[15px] font-bold">{astronomy.moonrise}</span>
                                             </div>
                                         )}
+                                        {astronomy.moonrise && astronomy.moonrise !== "No moonrise" && astronomy.moonset && astronomy.moonset !== "No moonset" && (
+                                            <div className="w-[1px] h-8 bg-[var(--border-soft)] sm:hidden" />
+                                        )}
                                         {astronomy.moonset && astronomy.moonset !== "No moonset" && (
-                                            <div className="flex items-center gap-1 justify-end">
-                                                <span className="theme-muted text-xs">Set</span>
-                                                <span className="font-semibold">{astronomy.moonset}</span>
+                                            <div className="flex flex-col items-center sm:items-end gap-0.5">
+                                                <span className="theme-muted text-[10px] font-bold uppercase tracking-[0.16em]">Set</span>
+                                                <span className="theme-heading text-[15px] font-bold">{astronomy.moonset}</span>
                                             </div>
                                         )}
                                     </div>
@@ -913,7 +1368,7 @@ export default function WeatherCard({
             <button
                 type="button"
                 onClick={() => setShowDataSources(true)}
-                className="surface-tile flex min-h-[56px] flex-col gap-3 rounded-[24px] px-4 py-4 text-left transition-all hover:border-[color:var(--border-strong)] hover:bg-[var(--surface-elevated)]"
+                className="surface-tile flex min-h-[56px] flex-col gap-3 rounded-[24px] px-4 py-4 text-left transition-all hover-border-strong-var hover-bg-surface-elevated-var"
             >
                 <div className="flex w-full items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -1005,50 +1460,71 @@ export default function WeatherCard({
 
             <div className="weather-card-columns flex w-full min-w-0 flex-1 flex-col items-start gap-6 sm:flex-row sm:flex-nowrap">
                 {/* Left Column (Hero & Personality) */}
-                <div className="weather-card-sidebar flex w-full flex-col gap-6 sm:w-[42%] sm:min-w-[340px] sm:flex-none sm:flex-shrink-0 sm:sticky sm:top-[5.5rem] sm:-mt-1.5 sm:pb-[5.5rem]">
+                <div className="weather-card-sidebar flex w-full flex-col gap-6 sm:w-[42%] sm:min-w-[340px] sm:flex-none sm:flex-shrink-0">
                     <div className={heroCardClass}>
-                        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,var(--weather-glow),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_30%)]" />
-                        <div className="pointer-events-none absolute -left-12 top-8 h-32 w-32 rounded-full bg-[var(--weather-glow)] blur-3xl opacity-40" />
-                        <div className="pointer-events-none absolute -right-10 bottom-6 h-28 w-28 rounded-full bg-[var(--accent-soft)] blur-3xl" />
+                        <div className="weather-hero-overlay pointer-events-none absolute inset-0" />
+                        <div className="bg-weather-glow-var pointer-events-none absolute -left-12 top-8 h-32 w-32 rounded-full blur-3xl opacity-40" />
+                        <div className="bg-accent-soft-var pointer-events-none absolute -right-10 bottom-6 h-28 w-28 rounded-full blur-3xl" />
 
                         {/* Top Header - Always visible */}
                         <div className="relative flex flex-col items-center text-center">
-                            <div className="flex flex-wrap items-center justify-center gap-2">
-                                <span className="surface-chip-muted rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
+                            <div className="weather-hero-badges flex flex-wrap items-center justify-center gap-2">
+                                <span className="surface-chip-muted rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em]">
                                     {currentCondition}
                                 </span>
-                                <span className="surface-chip-muted rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
+                                <span className="surface-chip-muted rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em]">
                                     Local {localTimeLabel}
                                 </span>
                             </div>
 
-                            <div className="mt-5 flex flex-col items-center gap-3">
-                                <div className={`flex h-24 w-24 items-center justify-center rounded-full ${iconBadgeClass}`}>
-                                    <IconComponent
-                                        size={iconSize}
-                                        strokeWidth={iconConfig.strokeWidth ?? 1.75}
-                                        className={iconConfig.className}
-                                    />
+                            <div className="mt-6 flex flex-col items-center gap-4">
+                                <div className="weather-hero-icon-shell">
+                                    <div className={`weather-hero-icon-core flex h-24 w-24 items-center justify-center rounded-full ${iconBadgeClass}`} style={iconBadgeStyle}>
+                                        <IconComponent
+                                            size={iconSize}
+                                            strokeWidth={iconConfig.strokeWidth ?? 1.75}
+                                            className={iconConfig.className}
+                                        />
+                                    </div>
                                 </div>
-                                <div className="flex flex-col items-center gap-1">
-                                    <span className="theme-heading flex items-center justify-center gap-2 text-6xl font-bold tracking-tight sm:text-7xl">
-                                        {displayTemp}&deg;
+                                <div className="flex flex-col items-center gap-2">
+                                    <span className="weather-hero-temperature theme-heading flex items-start justify-center gap-1 font-bold tracking-tight">
+                                        <span>{displayTemp}</span>
+                                        <span className="weather-hero-degree">&deg;</span>
                                     </span>
                                     <span
-                                        className="theme-heading max-w-[16rem] text-[1.7rem] font-bold capitalize leading-none sm:max-w-none sm:text-4xl"
+                                        className="weather-hero-location theme-heading max-w-[16rem] capitalize"
                                         title={locationName || "Current Location"}
                                     >
                                         {primaryLocationName}
                                     </span>
                                     {secondaryLocationName ? (
-                                        <span className="theme-muted max-w-[18rem] text-center text-sm font-semibold leading-snug sm:max-w-none">
+                                        <span className="weather-hero-subtitle theme-muted max-w-[18rem] text-center font-semibold leading-snug sm:max-w-none">
                                             {secondaryLocationName}
                                         </span>
                                     ) : null}
-                                    <span className="theme-muted text-sm font-semibold">
-                                        H: {dailyHigh}&deg; L: {dailyLow}&deg;
-                                    </span>
+                                    <div className="weather-hero-range surface-chip">
+                                        <span className="theme-subtle text-[10px] font-bold uppercase tracking-[0.22em]">Today</span>
+                                        <span className="theme-heading text-sm font-bold">H: {dailyHigh}&deg; L: {dailyLow}&deg;</span>
+                                    </div>
+                                    <p className="weather-hero-summary theme-muted max-w-[30ch] text-sm font-medium leading-relaxed">
+                                        {heroSummary}
+                                    </p>
                                 </div>
+                            </div>
+
+                            <div className="weather-hero-metrics mt-6 grid w-full grid-cols-3 gap-2">
+                                {heroMetrics.map(({ label, value, icon: MetricIcon, iconClassName }) => (
+                                    <div key={label} className="weather-hero-metric">
+                                        <div className="flex items-center gap-2">
+                                            <span className="weather-hero-metric-icon">
+                                                <MetricIcon className={iconClassName} size={15} />
+                                            </span>
+                                            <p className="theme-section-label text-[10px] font-bold tracking-[0.16em]">{label}</p>
+                                        </div>
+                                        <p className="theme-heading mt-2 text-sm font-bold sm:text-[15px]">{value}</p>
+                                    </div>
+                                ))}
                             </div>
 
                             {(hasConfidencePill || hasStationPill || hasMinutelyPill) && (
@@ -1056,60 +1532,68 @@ export default function WeatherCard({
                                     {conf && forecastConfidence && (
                                         <button
                                             onClick={() => setShowConfidenceDetail(v => !v)}
-                                            className={`${insightPillClass} ${showConfidenceDetail ? insightPillOpenClass : ""} ${(!hasStationPill && !hasMinutelyPill) ? "col-span-2 sm:col-span-3" : !hasStationPill ? "col-span-2" : ""}`}
+                                            className={`${insightPillClass} ${showConfidenceDetail ? insightPillOpenClass : ""}`}
                                         >
-                                            <div className="flex min-w-0 items-center gap-2">
-                                                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${confidenceDotClass}`} />
-                                                <div className="min-w-0">
-                                                    <p className="theme-section-label text-[10px] font-bold tracking-[0.2em]">Models</p>
-                                                    <p className="theme-heading mt-1 line-clamp-2 text-sm font-semibold leading-tight">
-                                                        {confidenceSummaryLabel ?? "Forecast spread"}
-                                                    </p>
-                                                    <p className="theme-subtle mt-0.5 text-xs font-medium">
-                                                        {confidenceAggregatedTemp}&deg; &plusmn;{forecastConfidence.spread}&deg;
-                                                    </p>
+                                            <div className="flex h-full w-full flex-col">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <span className="weather-card-insight-icon bg-amber-400/12 text-amber-300">
+                                                        <Sparkles size={16} />
+                                                    </span>
+                                                    <ChevronDown className={`theme-subtle mt-1 h-4 w-4 shrink-0 transition-transform ${showConfidenceDetail ? "rotate-180" : ""}`} />
+                                                </div>
+                                                <div className="mt-3 min-w-0 flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="theme-section-label text-[10px] font-bold tracking-[0.18em]">Models</p>
+                                                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${confidenceDotClass}`} />
+                                                    </div>
+                                                    <p className="theme-heading mt-2 text-base font-semibold leading-tight">{confidenceSummaryLabel ?? "Forecast spread"}</p>
+                                                    <p className="theme-subtle mt-1 text-sm">{confidenceAggregatedTemp}&deg; &plusmn;{forecastConfidence.spread}&deg;</p>
                                                 </div>
                                             </div>
-                                            <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showConfidenceDetail ? "rotate-180" : ""}`} />
                                         </button>
                                     )}
                                     {metarTempDisplay != null && (
                                         <button
                                             onClick={() => setShowStationDetail(v => !v)}
-                                            className={`${insightPillClass} ${showStationDetail ? insightPillOpenClass : ""} ${stationNeedsAttention ? "border-orange-300/70 bg-[linear-gradient(135deg,rgba(251,146,60,0.16),rgba(255,255,255,0.08))]" : ""} ${!hasConfidencePill ? "col-span-2" : ""}`}
+                                            className={`${insightPillClass} ${showStationDetail ? insightPillOpenClass : ""} ${stationNeedsAttention ? "border-orange-300/70 bg-[linear-gradient(135deg,rgba(251,146,60,0.16),rgba(255,255,255,0.08))]" : ""}`}
                                         >
-                                            <div className="min-w-0">
-                                                <p className="theme-section-label text-[10px] font-bold tracking-[0.2em]">Station</p>
-                                                <p className="theme-heading mt-1 line-clamp-2 text-sm font-semibold leading-tight">
-                                                    {metarTempDisplay}&deg; observed
-                                                </p>
-                                                <p className="theme-subtle mt-0.5 line-clamp-2 text-xs font-medium">
-                                                    {showStationTempDelta && metarTempDiff != null
-                                                        ? `${metarTempDiff > 0 ? "+" : ""}${metarTempDiff}° vs main temp`
-                                                        : stationDistanceDisplay ?? stationIcaoId}
-                                                </p>
+                                            <div className="flex h-full w-full flex-col">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <span className="weather-card-insight-icon bg-sky-400/12 text-sky-300">
+                                                        <Radio size={16} />
+                                                    </span>
+                                                    <ChevronDown className={`theme-subtle mt-1 h-4 w-4 shrink-0 transition-transform ${showStationDetail ? "rotate-180" : ""}`} />
+                                                </div>
+                                                <div className="mt-3 min-w-0 flex-1">
+                                                    <p className="theme-section-label text-[10px] font-bold tracking-[0.18em]">Station</p>
+                                                    <p className="theme-heading mt-2 text-base font-semibold leading-tight">{metarTempDisplay}&deg; observed</p>
+                                                    <p className="theme-subtle mt-1 text-sm">
+                                                        {showStationTempDelta && metarTempDiff != null
+                                                            ? `${metarTempDiff > 0 ? "+" : ""}${metarTempDiff}° vs model`
+                                                            : stationDistanceDisplay ?? stationIcaoId}
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showStationDetail ? "rotate-180" : ""}`} />
                                         </button>
                                     )}
                                     {showMinutelyBanner && rainSummary && (
                                         <button
                                             onClick={() => setShowMinutelyDetail(v => !v)}
-                                            className={`${insightPillClass} ${showMinutelyDetail ? insightPillOpenClass : ""} ${minutelyPillToneClass} col-span-2 sm:col-span-1`}
+                                            className={`${insightPillClass} ${showMinutelyDetail ? insightPillOpenClass : ""} ${minutelyPillToneClass}`}
                                         >
-                                            <div className="flex min-w-0 items-center gap-2">
-                                                <CloudRain className={`${minutelyIconClass} shrink-0`} size={16} />
-                                                <div className="min-w-0">
-                                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">{minutelyWindowLabel}</p>
-                                                    <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">
-                                                        {minutelyStatusLabel}
-                                                    </p>
-                                                    <p className="mt-0.5 line-clamp-2 text-xs font-medium opacity-75">
-                                                        Next-hour rain trend in 5-minute steps
-                                                    </p>
+                                            <div className="flex h-full w-full flex-col">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <span className="weather-card-insight-icon bg-cyan-400/12 text-cyan-300">
+                                                        <CloudRain size={16} />
+                                                    </span>
+                                                    <ChevronDown className={`theme-subtle mt-1 h-4 w-4 shrink-0 transition-transform ${showMinutelyDetail ? "rotate-180" : ""}`} />
+                                                </div>
+                                                <div className="mt-3 min-w-0 flex-1">
+                                                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-60">{minutelyWindowLabel}</p>
+                                                    <p className="mt-2 text-base font-semibold leading-tight">{minutelyStatusLabel}</p>
+                                                    <p className="mt-1 text-sm opacity-60">{minutelyPeakLabel}</p>
                                                 </div>
                                             </div>
-                                            <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showMinutelyDetail ? "rotate-180" : ""}`} />
                                         </button>
                                     )}
                                 </div>
@@ -1117,7 +1601,7 @@ export default function WeatherCard({
 
                             <CollapsiblePanel open={Boolean(conf && forecastConfidence && showConfidenceDetail)} className="mt-2 w-full">
                                 <div className="surface-tile rounded-2xl border px-4 py-3">
-                                    <div className="mb-3 flex items-center justify-between border-b border-[color:var(--border-soft)] pb-2">
+                                    <div className="border-soft-var mb-3 flex items-center justify-between border-b pb-2">
                                         <div className="flex items-center gap-2">
                                             <span className={`h-2 w-2 rounded-full ${confidenceDotClass}`} />
                                             <span className="theme-section-label text-xs font-bold tracking-wide">Model Average</span>
@@ -1138,7 +1622,7 @@ export default function WeatherCard({
                             </CollapsiblePanel>
                             <CollapsiblePanel open={Boolean(metar && metarTempDisplay != null && showStationDetail)} className="mt-2 w-full">
                                 <div className="surface-tile rounded-2xl border px-4 py-3 text-left">
-                                    <div className="mb-3 flex items-start justify-between gap-3 border-b border-[color:var(--border-soft)] pb-2">
+                                    <div className="border-soft-var mb-3 flex items-start justify-between gap-3 border-b pb-2">
                                         <div className="min-w-0">
                                             <p className="theme-section-label text-xs font-bold tracking-wide">Nearest Station</p>
                                             <p className="theme-heading truncate text-sm font-bold">{stationName}</p>
@@ -1257,18 +1741,18 @@ export default function WeatherCard({
                     </div>
 
                     {/* Personality + AI advice */}
-                    <div className="personality-card-shell overflow-hidden rounded-[28px] bg-[radial-gradient(circle_at_top_left,var(--accent-soft),transparent_38%),linear-gradient(160deg,rgba(255,255,255,0.06),transparent_62%)] border border-[color:var(--border-strong)] shadow-[var(--shadow-soft)]">
+                    <div className="personality-card-shell personality-card-bg border-strong-var shadow-soft-var overflow-hidden rounded-[28px] border">
                         <div className="px-5 py-5 sm:px-8 sm:py-8">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div className="min-w-0 flex-1">
                                     <div className="flex min-w-0 flex-col items-center gap-2.5 text-center sm:flex-row sm:items-start sm:text-left">
-                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm sm:h-11 sm:w-11">
+                                        <div className="border-accent-var bg-accent-soft-var text-accent-var flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border shadow-sm sm:h-11 sm:w-11">
                                             <PersonalityIcon size={18} />
                                         </div>
                                         <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                                                 <p className="theme-section-label text-[11px] font-bold tracking-[0.22em]">Forecast Voice</p>
-                                                <span className="rounded-full border border-[color:var(--accent-border)] bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--accent-text)]">
+                                                <span className="border-accent-var bg-accent-soft-var text-accent-var rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
                                                     Active
                                                 </span>
                                                 {selectedPersonality.isCustom ? (
@@ -1291,7 +1775,7 @@ export default function WeatherCard({
                                     <button
                                         type="button"
                                         onClick={() => setIsVoiceMenuOpen((currentValue) => !currentValue)}
-                                        className="surface-chip inline-flex min-h-[42px] shrink-0 items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition-all hover:border-[color:var(--accent-border)] hover:text-[var(--accent-text)]"
+                                        className="surface-chip inline-flex min-h-[42px] shrink-0 items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition-all hover-border-accent-var hover-text-accent-var"
                                         aria-expanded={isVoiceMenuOpen}
                                     >
                                         Change voice
@@ -1329,7 +1813,7 @@ export default function WeatherCard({
                             </div>
 
                             <div className="theme-divider mt-5 border-t pt-5">
-                                <div className="surface-tile-strong mx-auto flex max-w-[38rem] flex-col items-center rounded-[26px] px-6 py-6 text-center transition-all hover:shadow-[var(--shadow-soft)] hover:-translate-y-0.5 sm:px-8 sm:py-8">
+                                <div className="surface-tile-strong shadow-soft-var mx-auto flex max-w-[38rem] flex-col items-center rounded-[26px] px-6 py-6 text-center transition-all hover:-translate-y-0.5 sm:px-8 sm:py-8">
                                     <p className="theme-subtle text-[11px] font-bold uppercase tracking-[0.22em]">Current Read</p>
                                     <p className="theme-heading mt-4 max-w-[32ch] text-center text-[1.12rem] font-medium leading-[1.8] tracking-[-0.01em] sm:max-w-[36ch] sm:text-[1.15rem]">
                                         {resolvedAdvice}
@@ -1372,7 +1856,7 @@ export default function WeatherCard({
                     <div
                         role="dialog"
                         aria-modal="true"
-                        className="surface-card-strong w-full max-w-md rounded-[28px] border p-5 shadow-[var(--shadow-strong)]"
+                        className="surface-card-strong shadow-strong-var w-full max-w-md rounded-[28px] border p-5"
                         onClick={(event) => event.stopPropagation()}
                     >
                         <div className="flex items-start justify-between gap-3">
@@ -1395,7 +1879,7 @@ export default function WeatherCard({
 
                         <div className="theme-divider mt-4 flex max-h-[min(24rem,60dvh)] flex-col gap-3 overflow-y-auto border-t pt-4 pr-1">
                             {activeSourceEntries.map(({ name, role }) => (
-                                <div key={name} className="flex items-start gap-3 rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-tile)] px-3 py-3">
+                                <div key={name} className="border-soft-var bg-surface-tile-var flex items-start gap-3 rounded-2xl border px-3 py-3">
                                     <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-green-500" />
                                     <div className="min-w-0">
                                         <p className="theme-heading text-sm font-bold leading-tight">{name}</p>
