@@ -816,7 +816,7 @@ export default function Home() {
 
   return (
     <main
-      className="mx-auto flex w-full min-h-screen max-w-7xl flex-col gap-8 px-4 pt-0 pb-8 text-[var(--text-primary)] md:px-8"
+      className="relative mx-auto flex w-full min-h-screen max-w-7xl flex-col gap-8 px-4 pt-0 pb-8 text-[var(--text-primary)] md:px-8"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -826,7 +826,7 @@ export default function Home() {
       {/* Pull-to-refresh indicator */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed left-1/2 z-50 flex h-10 w-10 items-center justify-center rounded-full surface-card-strong shadow-md"
+        className="pointer-events-none absolute left-1/2 z-50 flex h-10 w-10 items-center justify-center rounded-full surface-card-strong shadow-md"
         style={
           isRefreshing
             ? {
