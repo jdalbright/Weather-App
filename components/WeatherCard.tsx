@@ -31,11 +31,13 @@ const IconMap: Record<string, any> = {
 };
 
 export default function WeatherCard({
+    locationName,
     weatherData,
     isDetailed,
     onToggleDetail,
     aiAdvice
 }: {
+    locationName: string,
     weatherData: any,
     isDetailed: boolean,
     onToggleDetail: () => void,
@@ -62,7 +64,7 @@ export default function WeatherCard({
                         {currentTemp}&deg;
                     </span>
                     <span className="text-var(--color-text-secondary) font-medium text-lg capitalize">
-                        {weatherData.timezone ? weatherData.timezone.split('/')[1].replace('_', ' ') : "Current Location"}
+                        {locationName || "Current Location"}
                     </span>
                     <span className="text-sm font-semibold opacity-70">
                         H: {dailyHigh}&deg; L: {dailyLow}&deg;

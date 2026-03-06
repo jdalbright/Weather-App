@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import WeatherCard from "@/components/WeatherCard";
-import { getThemeFromCode, getWeatherData } from "@/lib/weather";
+import { getThemeFromCode, getWeatherData, geocodeLocation } from "@/lib/weather";
 import { Search, Loader2 } from "lucide-react";
 
 const PERSONALITIES = [
@@ -20,12 +20,25 @@ export default function Home() {
   const [aiAdvice, setAiAdvice] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [theme, setTheme] = useState("theme-sun");
+  const [locationName, setLocationName] = useState("New York");
 
-  // Load weather on mount (defaulting to NYC if geolocations fails or is loading)
+  // Load weather on mount (try geolocation, fallback to NYC)
   useEffect(() => {
-    fetchWeatherForLocation(40.7128, -74.0060); // Default to NYC for now
-
-    // In a real app we'd trigger navigator.geolocation here
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          // If we had a reverse-geocode we could get the name, but for now just fetch weather
+          setLocationName("Current Location");
+          fetchWeatherForLocation(position.coords.latitude, position.coords.longitude);
+        },
+        (error) => {
+          console.log("Geolocation denied or failed, defaulting to NYC.");
+          fetchWeatherForLocation(40.7128, -74.0060); // Default to NYC
+        }
+      );
+    } else {
+      fetchWeatherForLocation(40.7128, -74.0060); // Default to NYC
+    }
   }, []);
 
   const fetchWeatherForLocation = async (lat: number, lon: number) => {
@@ -70,15 +83,22 @@ export default function Home() {
     }
   };
 
-  // Simple mock geo-search
-  const handleSearch = (e: React.FormEvent) => {
+  // Real geo-search via Open-Meteo
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app we'd hit a geocoding API to turn string -> lat/lon
-    // For now, let's just trigger a re-fetch with LA coordinates as a mock demo
-    if (searchQuery.toLowerCase().includes("los")) {
-      fetchWeatherForLocation(34.0522, -118.2437);
+    if (!searchQuery.trim()) return;
+
+    setLoading(true);
+    setWeather(null); // Clear to show loading state
+
+    const result = await geocodeLocation(searchQuery);
+
+    if (result) {
+      setLocationName(result.name);
+      await fetchWeatherForLocation(result.lat, result.lon);
     } else {
-      fetchWeatherForLocation(51.5074, -0.1278); // London
+      alert("Location not found. Try another city.");
+      setLoading(false);
     }
     setSearchQuery("");
   };
@@ -108,8 +128,8 @@ export default function Home() {
               key={p.id}
               onClick={() => handlePersonalityChange(p.id)}
               className={`flex-1 min-w-[80px] text-sm font-bold py-2 px-4 rounded-full transition-all duration-300 ${personality === p.id
-                  ? "bg-white text-gray-800 shadow-md"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-white/20"
+                ? "bg-white text-gray-800 shadow-md"
+                : "text-gray-500 hover:text-gray-700 hover:bg-white/20"
                 }`}
             >
               {p.label}
@@ -125,6 +145,7 @@ export default function Home() {
         </div>
       ) : (
         <WeatherCard
+          locationName={locationName}
           weatherData={weather}
           isDetailed={isDetailed}
           onToggleDetail={() => setIsDetailed(!isDetailed)}

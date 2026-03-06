@@ -16,6 +16,26 @@ export async function getWeatherData(lat: number, lon: number) {
   }
 }
 
+export async function geocodeLocation(query: string) {
+  try {
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=en&format=json`);
+    if (!res.ok) throw new Error("Failed to geocode");
+    const data = await res.json();
+    if (data.results && data.results.length > 0) {
+      const result = data.results[0];
+      return {
+        lat: result.latitude,
+        lon: result.longitude,
+        name: `${result.name}${result.admin1 ? `, ${result.admin1}` : ''}${result.country ? `, ${result.country}` : ''}`
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error("Geocoding error:", error);
+    return null;
+  }
+}
+
 export function getWeatherIconFromCode(code: number, isDay: number = 1) {
   // WMO Weather interpretation codes
   if (code === 0) return isDay ? "sun" : "moon";
@@ -31,10 +51,10 @@ export function getWeatherIconFromCode(code: number, isDay: number = 1) {
 }
 
 export function getThemeFromCode(code: number, isDay: number = 1) {
-    if (!isDay) return "theme-night";
-    if (code === 0 || code === 1) return "theme-sun";
-    if (code === 2 || code === 3 || code === 45 || code === 48) return "theme-cloud";
-    if (code >= 51 && code <= 67 || code >= 80 && code <= 82 || code >= 95) return "theme-rain";
-    if (code >= 71 && code <= 77 || code >= 85 && code <= 86) return "theme-snow";
-    return "theme-sun";
+  if (!isDay) return "theme-night";
+  if (code === 0 || code === 1) return "theme-sun";
+  if (code === 2 || code === 3 || code === 45 || code === 48) return "theme-cloud";
+  if (code >= 51 && code <= 67 || code >= 80 && code <= 82 || code >= 95) return "theme-rain";
+  if (code >= 71 && code <= 77 || code >= 85 && code <= 86) return "theme-snow";
+  return "theme-sun";
 }
