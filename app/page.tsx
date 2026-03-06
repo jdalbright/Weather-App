@@ -49,11 +49,15 @@ type CompatibleMediaQueryList = MediaQueryList & {
 
 const APPEARANCE_STORAGE_KEY = "weather-appearance";
 const CUSTOM_PERSONALITIES_STORAGE_KEY = "weather-custom-personalities";
+const DISMISSED_ALERTS_STORAGE_KEY = "weather-dismissed-alerts";
 
 type AdviceExtras = {
   aqi?: number;
   alerts?: string;
 };
+
+type AlertSource = "weatherapi" | "nws";
+type DismissibleAlert = Pick<WeatherAPIAlert, "event" | "headline" | "severity" | "expires">;
 
 type GeneratedPersonalityResponse = {
   label: string;
@@ -75,6 +79,40 @@ function createCustomPersonalityId(label: string): string {
   }
 
   return `custom-${normalized}-${Date.now().toString(36)}`;
+}
+
+function normalizeAlertPart(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function isAlertActive(expires: string, referenceTimeMs = Date.now()): boolean {
+  if (!expires.trim()) return true;
+
+  const expiresAt = Date.parse(expires);
+  if (Number.isNaN(expiresAt)) return true;
+
+  return expiresAt > referenceTimeMs;
+}
+
+function createAlertDismissKey(source: AlertSource, alert: DismissibleAlert): string {
+  return [
+    source,
+    normalizeAlertPart(alert.event),
+    normalizeAlertPart(alert.headline),
+    normalizeAlertPart(alert.severity),
+    normalizeAlertPart(alert.expires),
+  ].join("|");
+}
+
+function filterVisibleAlerts<T extends DismissibleAlert>(
+  source: AlertSource,
+  alerts: T[],
+  dismissedAlertKeys: string[],
+  referenceTimeMs = Date.now()
+): T[] {
+  return alerts.filter((alert) => (
+    isAlertActive(alert.expires, referenceTimeMs) && !dismissedAlertKeys.includes(createAlertDismissKey(source, alert))
+  ));
 }
 
 function summarizeAlerts(weatherAlerts: WeatherAPIAlert[], nwsAlerts: NWSAlert[]): string | undefined {
@@ -159,6 +197,8 @@ export default function Home() {
   const [customIdea, setCustomIdea] = useState("");
   const [customPersonalityError, setCustomPersonalityError] = useState<string | null>(null);
   const [isGeneratingCustomPersonality, setIsGeneratingCustomPersonality] = useState(false);
+  const [dismissedAlertKeys, setDismissedAlertKeys] = useState<string[]>([]);
+  const [alertRefreshTick, setAlertRefreshTick] = useState(() => Date.now());
   const [aiAdvice, setAiAdvice] = useState("");
   const [theme, setTheme] = useState("theme-sun");
   const [appearance, setAppearance] = useState<Appearance>("system");
@@ -168,6 +208,7 @@ export default function Home() {
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const adviceRequestIdRef = useRef(0);
   const locationRequestIdRef = useRef(0);
+  const lastAlertSummaryRef = useRef<string | null>(null);
   const personalityRef = useRef(personality);
   const customPersonalitiesRef = useRef<CustomPersonality[]>([]);
   const settingsAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -184,6 +225,7 @@ export default function Home() {
     const savedSettings = localStorage.getItem("weather-settings");
     const savedAppearance = localStorage.getItem(APPEARANCE_STORAGE_KEY);
     const savedCustomPersonalities = localStorage.getItem(CUSTOM_PERSONALITIES_STORAGE_KEY);
+    const savedDismissedAlerts = localStorage.getItem(DISMISSED_ALERTS_STORAGE_KEY);
 
     frameId = window.requestAnimationFrame(() => {
       if (savedCustomPersonalities) {
@@ -216,6 +258,17 @@ export default function Home() {
       if (savedAppearance === "system" || savedAppearance === "light" || savedAppearance === "dark") {
         setAppearance(savedAppearance);
       }
+
+      if (savedDismissedAlerts) {
+        try {
+          const parsed = JSON.parse(savedDismissedAlerts);
+          if (Array.isArray(parsed)) {
+            setDismissedAlertKeys(parsed.filter((value): value is string => typeof value === "string").slice(0, 100));
+          }
+        } catch {
+          // ignore corrupt data
+        }
+      }
     });
 
     return () => window.cancelAnimationFrame(frameId);
@@ -233,6 +286,10 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem(CUSTOM_PERSONALITIES_STORAGE_KEY, JSON.stringify(customPersonalities));
   }, [customPersonalities]);
+
+  useEffect(() => {
+    localStorage.setItem(DISMISSED_ALERTS_STORAGE_KEY, JSON.stringify(dismissedAlertKeys));
+  }, [dismissedAlertKeys]);
 
   useEffect(() => {
     localStorage.setItem(APPEARANCE_STORAGE_KEY, appearance);
@@ -379,14 +436,19 @@ export default function Home() {
     if (requestId !== locationRequestIdRef.current) return;
 
     if (data) {
+      const nextWeatherAlerts = extData.alerts ?? [];
+      const nextNwsAlerts = extData.nwsAlerts ?? [];
+      const nextVisibleWeatherAlerts = filterVisibleAlerts("weatherapi", nextWeatherAlerts, dismissedAlertKeys);
+      const nextVisibleNwsAlerts = filterVisibleAlerts("nws", nextNwsAlerts, dismissedAlertKeys);
+
       setAirQuality(aqData);
       setMarine(marineData);
       setFlood(floodData);
       setHistorical(histData);
-      setNwsAlerts(extData.nwsAlerts ?? []);
+      setNwsAlerts(nextNwsAlerts);
       setNwsConnected(extData.nwsConnected ?? false);
       setAstronomy(extData.astronomy ?? null);
-      setWeatherAlerts(extData.alerts ?? []);
+      setWeatherAlerts(nextWeatherAlerts);
       setMetar(extData.metar ?? null);
       setMetarConnected(extData.metarConnected ?? false);
       setRainSummary(extData.rainSummary ?? null);
@@ -398,7 +460,7 @@ export default function Home() {
       void fetchAIAdvice(
         data,
         getPersonality(personalityRef.current, customPersonalitiesRef.current),
-        buildAdviceExtras(aqData, extData.alerts ?? [], extData.nwsAlerts ?? [])
+        buildAdviceExtras(aqData, nextVisibleWeatherAlerts, nextVisibleNwsAlerts)
       );
       setLoading(false);
       return;
@@ -406,7 +468,7 @@ export default function Home() {
 
     setLocationLoadError("Couldn't load weather for this location. Try again.");
     setLoading(false);
-  }, [fetchAIAdvice, settings.distUnit, settings.tempUnit]);
+  }, [dismissedAlertKeys, fetchAIAdvice, settings.distUnit, settings.tempUnit]);
 
   const initialFetchRef = useRef(false);
 
@@ -475,6 +537,18 @@ export default function Home() {
     return () => window.clearTimeout(timeoutId);
   }, [loading, weather]);
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setAlertRefreshTick(Date.now());
+    }, 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const visibleWeatherAlerts = filterVisibleAlerts("weatherapi", weatherAlerts, dismissedAlertKeys, alertRefreshTick);
+  const visibleNwsAlerts = filterVisibleAlerts("nws", nwsAlerts, dismissedAlertKeys, alertRefreshTick);
+  const visibleAlertSummary = summarizeAlerts(visibleWeatherAlerts, visibleNwsAlerts) ?? "";
+
   const allPersonalities = getAllPersonalities(customPersonalities);
 
   useEffect(() => {
@@ -487,7 +561,7 @@ export default function Home() {
     const nextPersonality = getPersonality(newP, customPersonalities);
     setPersonality(nextPersonality.id);
     if (weather) {
-      void fetchAIAdvice(weather, nextPersonality, buildAdviceExtras(airQuality, weatherAlerts, nwsAlerts));
+      void fetchAIAdvice(weather, nextPersonality, buildAdviceExtras(airQuality, visibleWeatherAlerts, visibleNwsAlerts));
     }
   };
 
@@ -533,7 +607,7 @@ export default function Home() {
       setCustomIdea("");
 
       if (weather) {
-        void fetchAIAdvice(weather, candidate, buildAdviceExtras(airQuality, weatherAlerts, nwsAlerts));
+        void fetchAIAdvice(weather, candidate, buildAdviceExtras(airQuality, visibleWeatherAlerts, visibleNwsAlerts));
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not generate a custom personality.";
@@ -541,7 +615,7 @@ export default function Home() {
     } finally {
       setIsGeneratingCustomPersonality(false);
     }
-  }, [airQuality, customIdea, customPersonalities, fetchAIAdvice, weather, weatherAlerts, nwsAlerts]);
+  }, [airQuality, customIdea, customPersonalities, fetchAIAdvice, visibleNwsAlerts, visibleWeatherAlerts, weather]);
 
   const handleDeleteCustomPersonality = useCallback((personalityId: string) => {
     const nextCustomPersonalities = customPersonalities.filter((candidate) => candidate.id !== personalityId);
@@ -552,9 +626,21 @@ export default function Home() {
     const fallbackPersonality = getPersonality(DEFAULT_PERSONALITY, nextCustomPersonalities);
     setPersonality(fallbackPersonality.id);
     if (weather) {
-      void fetchAIAdvice(weather, fallbackPersonality, buildAdviceExtras(airQuality, weatherAlerts, nwsAlerts));
+      void fetchAIAdvice(weather, fallbackPersonality, buildAdviceExtras(airQuality, visibleWeatherAlerts, visibleNwsAlerts));
     }
-  }, [airQuality, customPersonalities, fetchAIAdvice, nwsAlerts, personality, weather, weatherAlerts]);
+  }, [airQuality, customPersonalities, fetchAIAdvice, personality, visibleNwsAlerts, visibleWeatherAlerts, weather]);
+
+  const handleDismissAlert = useCallback((source: AlertSource, alert: DismissibleAlert) => {
+    const alertKey = createAlertDismissKey(source, alert);
+
+    setDismissedAlertKeys((currentKeys) => {
+      if (currentKeys.includes(alertKey)) {
+        return currentKeys;
+      }
+
+      return [alertKey, ...currentKeys].slice(0, 100);
+    });
+  }, []);
 
   // Handle location selection from search
   const handleLocationSelect = async (lat: number, lon: number, name: string, countryCode?: string | null) => {
@@ -563,6 +649,25 @@ export default function Home() {
   };
 
   const selectedPersonality = getPersonality(personality, customPersonalities);
+
+  useEffect(() => {
+    if (!weather) {
+      lastAlertSummaryRef.current = visibleAlertSummary;
+      return;
+    }
+
+    if (lastAlertSummaryRef.current === null) {
+      lastAlertSummaryRef.current = visibleAlertSummary;
+      return;
+    }
+
+    if (lastAlertSummaryRef.current === visibleAlertSummary) {
+      return;
+    }
+
+    lastAlertSummaryRef.current = visibleAlertSummary;
+    void fetchAIAdvice(weather, selectedPersonality, buildAdviceExtras(airQuality, visibleWeatherAlerts, visibleNwsAlerts));
+  }, [airQuality, fetchAIAdvice, selectedPersonality, visibleAlertSummary, visibleNwsAlerts, visibleWeatherAlerts, weather]);
   const appearanceLabel = appearance === "system"
     ? `System (${resolvedAppearance})`
     : appearance === "dark"
@@ -920,8 +1025,9 @@ export default function Home() {
           flood={flood}
           historical={historical}
           astronomy={astronomy}
-          weatherAlerts={weatherAlerts}
-          nwsAlerts={nwsAlerts}
+          weatherAlerts={visibleWeatherAlerts}
+          nwsAlerts={visibleNwsAlerts}
+          onDismissAlert={handleDismissAlert}
           forecastConfidence={forecastConfidence}
           climateNormal={climateNormal}
           metar={metar}

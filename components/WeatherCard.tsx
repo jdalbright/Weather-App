@@ -135,6 +135,7 @@ type WeatherCardProps = {
     onPersonalityChange: (id: string) => void,
     onDeleteCustomPersonality: (id: string) => void,
     onGenerateCustomPersonality: () => void | Promise<void>,
+    onDismissAlert: (source: "weatherapi" | "nws", alert: { event: string; headline: string; severity: string; expires: string }) => void,
     distUnit?: "kmh" | "mph",
     airQuality?: AirQualityData | null,
     marine?: MarineData | null,
@@ -169,6 +170,7 @@ export default function WeatherCard({
     onPersonalityChange,
     onDeleteCustomPersonality,
     onGenerateCustomPersonality,
+    onDismissAlert,
     distUnit = "mph",
     airQuality,
     marine,
@@ -187,7 +189,7 @@ export default function WeatherCard({
     const [showStationDetail, setShowStationDetail] = useState(false);
     const [showMinutelyDetail, setShowMinutelyDetail] = useState(false);
     const [isVoiceMenuOpen, setIsVoiceMenuOpen] = useState(false);
-    const [expandedAlertIndex, setExpandedAlertIndex] = useState<number | null>(null);
+    const [expandedAlertKey, setExpandedAlertKey] = useState<string | null>(null);
     const [openDetailSections, setOpenDetailSections] = useState<Record<DetailSectionId, boolean>>({
         forecast: false,
         conditions: true,
@@ -221,11 +223,27 @@ export default function WeatherCard({
         setIsVoiceMenuOpen(false);
     };
 
-    // Alerts (deduplicated by event name)
+    // Alerts (deduplicated by source + headline + expiry)
     const allAlerts = [
-        ...(weatherAlerts ?? []).map(a => ({ event: a.event, headline: a.headline, severity: a.severity, details: a.desc })),
-        ...(nwsAlerts ?? []).map(a => ({ event: a.event, headline: a.headline, severity: a.severity, details: a.description })),
-    ].filter((a, i, arr) => arr.findIndex(x => x.event === a.event) === i);
+        ...(weatherAlerts ?? []).map((alert) => ({
+            source: "weatherapi" as const,
+            key: ["weatherapi", alert.event, alert.headline, alert.expires].join("|"),
+            event: alert.event,
+            headline: alert.headline,
+            severity: alert.severity,
+            expires: alert.expires,
+            details: alert.desc,
+        })),
+        ...(nwsAlerts ?? []).map((alert) => ({
+            source: "nws" as const,
+            key: ["nws", alert.event, alert.headline, alert.expires].join("|"),
+            event: alert.event,
+            headline: alert.headline,
+            severity: alert.severity,
+            expires: alert.expires,
+            details: alert.description,
+        })),
+    ].filter((alert, index, alerts) => alerts.findIndex((candidate) => candidate.key === alert.key) === index);
 
     // AQI
     const aqiValue = airQuality?.current?.us_aqi ?? null;
@@ -415,33 +433,54 @@ export default function WeatherCard({
             {/* Alerts banner */}
             {allAlerts.length > 0 && (
                 <div className="flex flex-col gap-2">
-                    {allAlerts.map((alert, i) => (
-                        <button
-                            key={i}
-                            type="button"
-                            onClick={() => setExpandedAlertIndex(expandedAlertIndex === i ? null : i)}
-                            className="flex min-h-[56px] items-start gap-3 rounded-2xl border border-red-200 bg-red-50/90 px-4 py-3 text-left transition-all hover:border-red-300 hover:bg-red-50"
+                    {allAlerts.map((alert) => (
+                        <div
+                            key={alert.key}
+                            className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50/90 px-4 py-3 transition-all hover:border-red-300 hover:bg-red-50"
                         >
                             <AlertTriangle className="mt-0.5 shrink-0 text-red-500" size={18} />
-                            <div className="min-w-0 flex-1">
+                            <div className="min-h-[56px] min-w-0 flex-1">
                                 <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => setExpandedAlertKey(expandedAlertKey === alert.key ? null : alert.key)}
+                                        className="min-w-0 flex-1 text-left"
+                                    >
                                         <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-red-600">{alert.severity} · {alert.event}</p>
-                                        <p className={`mt-1 text-[15px] font-semibold leading-snug text-red-900 ${expandedAlertIndex === i ? "" : "line-clamp-3"}`}>
+                                        <p className={`mt-1 text-[15px] font-semibold leading-snug text-red-900 ${expandedAlertKey === alert.key ? "" : "line-clamp-3"}`}>
                                             {alert.headline}
                                         </p>
+                                    </button>
+                                    <div className="flex shrink-0 items-start gap-2">
+                                        <span className="rounded-full border border-red-200 bg-white/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700">
+                                            {expandedAlertKey === alert.key ? "Hide" : "Details"}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (expandedAlertKey === alert.key) {
+                                                    setExpandedAlertKey(null);
+                                                }
+                                                onDismissAlert(alert.source, {
+                                                    event: alert.event,
+                                                    headline: alert.headline,
+                                                    severity: alert.severity,
+                                                    expires: alert.expires,
+                                                });
+                                            }}
+                                            className="rounded-full border border-red-200 bg-white/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700 transition-colors hover:bg-white"
+                                        >
+                                            Dismiss
+                                        </button>
                                     </div>
-                                    <span className="shrink-0 rounded-full border border-red-200 bg-white/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700">
-                                        {expandedAlertIndex === i ? "Hide" : "Details"}
-                                    </span>
                                 </div>
-                                {expandedAlertIndex === i && alert.details ? (
+                                {expandedAlertKey === alert.key && alert.details ? (
                                     <p className="mt-2 text-sm leading-relaxed text-red-800">
                                         {alert.details}
                                     </p>
                                 ) : null}
                             </div>
-                        </button>
+                        </div>
                     ))}
                 </div>
             )}
