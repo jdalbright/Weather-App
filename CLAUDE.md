@@ -17,11 +17,12 @@ No test suite is configured.
 Create a `.env.local` file with:
 
 ```
-AI_GATEWAY_API_KEY=   # Vercel AI Gateway key (used by /api/chat)
+AI_GATEWAY_API_KEY=   # Vercel AI Gateway key (used by /api/chat and /api/personality)
 WEATHERAPI_KEY=       # weatherapi.com key (used by /api/extended-weather for astronomy + alerts)
+PIRATEWEATHER_KEY=    # pirateweather.net key (used by /api/extended-weather for minute-level rain)
 ```
 
-Both keys are optional — the app falls back to mock/empty responses if missing.
+All keys are optional — the app falls back to mock/empty responses if missing.
 
 ## Architecture
 
@@ -31,9 +32,9 @@ This is a **Next.js 16 App Router** app (React 19, TypeScript, Tailwind v4). It 
 
 `app/page.tsx` (client component) is the entire app shell. On load it:
 1. Gets geolocation (falls back to NYC)
-2. Fires 7 parallel fetches via `fetchWeatherForLocation`:
+2. Fires parallel fetches via `fetchWeatherForLocation`:
    - `lib/weather.ts` helpers hit Open-Meteo APIs directly from the client (weather, air quality, marine, flood, historical, NWS alerts)
-   - `/api/extended-weather` (server route) fetches WeatherAPI for astronomy + alerts using the secret key
+   - `/api/extended-weather` (server route) fetches WeatherAPI astronomy, Pirate Weather rain summary, METAR, and NWS alerts using secret keys
 3. Calls `/api/chat` (server route) to generate AI advice via Vercel AI Gateway → Gemini Flash
 
 ### Key files
@@ -47,7 +48,8 @@ This is a **Next.js 16 App Router** app (React 19, TypeScript, Tailwind v4). It 
 | `lib/weather.ts` | All API fetch functions + type definitions + utility helpers (WMO code mapping, theme selection, unit formatting) |
 | `lib/personalities.ts` | Personality definitions (id, label, prompt, icon) and helpers |
 | `app/api/chat/route.ts` | POST handler — builds personality system prompt, calls Vercel AI Gateway (OpenAI-compatible interface) |
-| `app/api/external-weather/route.ts` | GET handler — fetches WeatherAPI astronomy + alerts server-side |
+| `app/api/extended-weather/route.ts` | GET handler — fetches WeatherAPI astronomy, Pirate Weather rain, METAR, and NWS alerts server-side |
+| `app/api/personality/route.ts` | POST handler — generates custom AI personality via Vercel AI Gateway |
 
 ### Theming
 
@@ -55,11 +57,11 @@ This is a **Next.js 16 App Router** app (React 19, TypeScript, Tailwind v4). It 
 
 ### Settings persistence
 
-User preferences (temp unit, distance unit, personality) are stored in `localStorage` under keys `weather-settings` and `weather-personality`. Settings are read during `useState` initialization to avoid hydration flashes.
+User preferences (temp unit, distance unit, personality, appearance mode, recent searches, custom personalities) are stored in `localStorage`. Settings are read during `useState` initialization to avoid hydration flashes.
 
 ### AI advice
 
-`/api/chat` uses the Vercel AI Gateway with an OpenAI-compatible provider pointed at `https://ai-gateway.vercel.sh/v1`, routing to `gemini-3.1-flash-lite-preview`. The system prompt is selected from `PERSONALITY_PROMPTS` in `lib/personalities.ts` based on the user's chosen personality.
+`/api/chat` uses the Vercel AI Gateway with an OpenAI-compatible provider pointed at `https://ai-gateway.vercel.sh/v1`, routing to `gemini-3.1-flash-lite-preview`. The system prompt is selected from `PERSONALITY_PROMPTS` in `lib/personalities.ts` based on the user's chosen personality (built-in or custom).
 
 ### External APIs used (client-side, no key required)
 
@@ -67,7 +69,8 @@ User preferences (temp unit, distance unit, personality) are stored in `localSto
 - `air-quality-api.open-meteo.com` — air quality
 - `marine-api.open-meteo.com` — wave data (returns null for inland locations)
 - `flood-api.open-meteo.com` — river discharge
-- `archive-api.open-meteo.com` — historical data (same day last year)
+- `archive-api.open-meteo.com` — historical data (same day last year + 3-year climate normals)
 - `api.weather.gov` — NWS alerts (US only)
 - `geocoding-api.open-meteo.com` — location search
 - `nominatim.openstreetmap.org` — reverse geocoding for geolocation name
+- `aviationweather.gov` — METAR station observations (nearest airport)
