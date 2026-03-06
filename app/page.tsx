@@ -53,8 +53,8 @@ const DISMISSED_ALERTS_STORAGE_KEY = "weather-dismissed-alerts";
 
 const PULL_THRESHOLD = 72;
 const MAX_PULL = PULL_THRESHOLD + 24;
-const PULL_INDICATOR_HIDDEN_OFFSET = 56;
-const PULL_INDICATOR_VISIBLE_OFFSET = 24;
+const PULL_INDICATOR_SIZE = 40;
+const PULL_INDICATOR_REFRESH_HEIGHT = 56;
 
 type AdviceExtras = {
   aqi?: number;
@@ -520,6 +520,9 @@ export default function Home() {
       setPullDistance(0);
       return;
     }
+    if (e.cancelable) {
+      e.preventDefault();
+    }
     const distance = Math.min(delta * 0.45, MAX_PULL);
     setPullDistance(distance);
   }, []);
@@ -809,49 +812,55 @@ export default function Home() {
   }, [scrollSettingsIntoView]);
 
   const pullRatio = Math.min(pullDistance / PULL_THRESHOLD, 1);
-  const pullIndicatorOffset = Math.min(
-    Math.max(pullDistance - PULL_INDICATOR_HIDDEN_OFFSET, -PULL_INDICATOR_HIDDEN_OFFSET),
-    PULL_INDICATOR_VISIBLE_OFFSET
-  );
+  const pullIndicatorHeight = isRefreshing
+    ? PULL_INDICATOR_REFRESH_HEIGHT
+    : pullDistance;
 
   return (
     <main
-      className="relative mx-auto flex w-full min-h-screen max-w-7xl flex-col gap-8 px-4 pt-0 pb-8 text-[var(--text-primary)] md:px-8"
+      className="mx-auto flex w-full min-h-screen max-w-7xl flex-col gap-8 px-4 pt-0 pb-8 text-[var(--text-primary)] md:px-8"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
       style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 2rem)" }}
     >
 
       {/* Pull-to-refresh indicator */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 z-50 flex h-10 w-10 items-center justify-center rounded-full surface-card-strong shadow-md"
-        style={
-          isRefreshing
-            ? {
-                top: "calc(env(safe-area-inset-top, 0px) + 8px)",
-                opacity: 1,
-                animation: "pull-refresh-pop 0.3s ease-out forwards",
-                transition: "none",
-              }
-            : {
-                top: "calc(env(safe-area-inset-top, 0px) + 8px)",
-                opacity: pullDistance > 0 ? pullRatio : 0,
-                transform: `translateX(-50%) translateY(${pullDistance > 0 ? pullIndicatorOffset : -PULL_INDICATOR_HIDDEN_OFFSET}px)`,
-                transition: "opacity 150ms, transform 150ms",
-              }
-        }
+        className="pointer-events-none -mb-4 flex items-end justify-center overflow-hidden transition-[height] duration-150 ease-out"
+        style={{ height: pullIndicatorHeight }}
       >
-        <RefreshCw
-          size={18}
-          className="text-[var(--accent-text)]"
+        <div
+          className="flex items-center justify-center rounded-full surface-card-strong shadow-md"
           style={
             isRefreshing
-              ? { animation: "pull-refresh-spin 0.7s linear infinite" }
-              : { transform: `rotate(${pullRatio * 360}deg)`, transition: "transform 150ms" }
+              ? {
+                  width: PULL_INDICATOR_SIZE,
+                  height: PULL_INDICATOR_SIZE,
+                  opacity: 1,
+                  animation: "pull-refresh-pop 0.3s ease-out forwards",
+                }
+              : {
+                  width: PULL_INDICATOR_SIZE,
+                  height: PULL_INDICATOR_SIZE,
+                  opacity: pullDistance > 0 ? pullRatio : 0,
+                  transform: `translateY(${Math.max((1 - pullRatio) * 16, 0)}px)`,
+                  transition: "opacity 150ms, transform 150ms",
+                }
           }
-        />
+        >
+          <RefreshCw
+            size={18}
+            className="text-[var(--accent-text)]"
+            style={
+              isRefreshing
+                ? { animation: "pull-refresh-spin 0.7s linear infinite" }
+                : { transform: `rotate(${pullRatio * 360}deg)`, transition: "transform 150ms" }
+            }
+          />
+        </div>
       </div>
 
       {/* Top Search, Units & Personality Settings */}
