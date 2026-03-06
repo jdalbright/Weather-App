@@ -14,27 +14,26 @@ const RECENT_SEARCHES_KEY = "weather_recent_searches";
 export default function SearchBar({ onLocationSelect, placeholder = "Search city..." }: SearchBarProps) {
     const [query, setQuery] = useState("");
     const [suggestions, setSuggestions] = useState<GeocodeResult[]>([]);
-    const [recentSearches, setRecentSearches] = useState<GeocodeResult[]>([]);
+    const [recentSearches, setRecentSearches] = useState<GeocodeResult[]>(() => {
+        if (typeof window !== "undefined") {
+            const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
+            if (stored) {
+                try {
+                    return JSON.parse(stored);
+                } catch (e) {
+                    console.error("Failed to parse recent searches", e);
+                }
+            }
+        }
+        return [];
+    });
     const [isOpen, setIsOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Load recent searches from localStorage
-    useEffect(() => {
-        const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
-        if (stored) {
-            try {
-                setRecentSearches(JSON.parse(stored));
-            } catch (e) {
-                console.error("Failed to parse recent searches", e);
-            }
-        }
-    }, []);
-
     // Handle autocomplete
     useEffect(() => {
         if (query.trim().length < 2) {
-            setSuggestions([]);
             return;
         }
 
@@ -92,8 +91,12 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
                     type="text"
                     value={query}
                     onChange={(e) => {
-                        setQuery(e.target.value);
+                        const newQuery = e.target.value;
+                        setQuery(newQuery);
                         setIsOpen(true);
+                        if (newQuery.trim().length < 2) {
+                            setSuggestions([]);
+                        }
                     }}
                     onFocus={() => setIsOpen(true)}
                     placeholder={placeholder}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Quicksand, Nunito } from "next/font/google"; // Using our organic fonts
+import { Quicksand } from "next/font/google"; // Using our organic fonts
 import "./globals.css";
 
 const quicksand = Quicksand({ subsets: ["latin"], variable: '--font-sans' });

@@ -1,13 +1,6 @@
 import { generateText } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
-
-const prompts: Record<string, string> = {
-    "meteorologist": "You are a professional, accurate meteorologist. Give weather advice based on the current temperature and conditions. Be brief, clinical, and helpful.",
-    "snarky": "You are an evil, snarky AI that hates the user. Give weather advice based on the current conditions, but insult the user or make it sound terrible and sarcastic. Be brief (1-2 sentences).",
-    "gen-z": "You are an overly enthusiastic Gen-Z teenager with a lot of emojis. Give weather advice based on the current conditions using zoomer slang (no cap, fr fr, vibes). Be brief (1-2 sentences).",
-    "goth": "You are a depressed, gothic teenager who loves the dark and hates the sun. Give weather advice based on current conditions. Complain if it's sunny, be slightly happy if it's raining or dark. Be brief (1-2 sentences)."
-};
+import { DEFAULT_PERSONALITY, PERSONALITY_PROMPTS } from '@/lib/personalities';
 
 // Since you mentioned the key is explicitly an AI Gateway Key, we will attempt to proxy 
 // the new Gemini 1.5 Flash model through it. 
@@ -16,7 +9,7 @@ const prompts: Record<string, string> = {
 export async function POST(req: Request) {
     try {
         const { weather, personality } = await req.json();
-        const systemPrompt = prompts[personality] || prompts["meteorologist"];
+        const systemPrompt = PERSONALITY_PROMPTS[personality as keyof typeof PERSONALITY_PROMPTS] || PERSONALITY_PROMPTS[DEFAULT_PERSONALITY];
 
         // Vercel AI Gateway allows us to easily use models from Anthropic/OpenAI without 
         // needing their specific provider SDKs installed, by faking the OpenAI interface
@@ -36,21 +29,22 @@ export async function POST(req: Request) {
             // We use Gemini Flash 3.1 Lite per your request!
             model: gatewayProvider('gemini-3.1-flash-lite-preview'),
             system: systemPrompt,
-            prompt: `Current Weather: ${weather.temp}°${weather.unit || 'F'}, Weather Code: ${weather.condition}. Is Day: ${weather.isDay}. Give short advice.`,
+            prompt: `Current Local Time: ${weather.localTime}, Weather: ${weather.temp}°${weather.unit || 'F'} (Feels like ${weather.feelsLike}°), Daily High/Low: ${weather.highTemp}°/${weather.lowTemp}°. Weather Description: ${weather.condition}. Is Day: ${weather.isDay} (Sunrise: ${weather.sunrise}, Sunset: ${weather.sunset}). Wind Speed: ${weather.windSpeed}. Humidity: ${weather.humidity}%. Rain Chance: ${weather.rainChance}%. UV Index: ${weather.uvIndex}. Cloud Cover: ${weather.cloudCover}%. Visibility: ${weather.visibility}. Give short advice considering the time of day and full weather conditions.`,
         });
 
         return Response.json({ text });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("AI Generation Error", error);
+        const errorMessage = error instanceof Error ? error.message : "";
 
         // If it throws an authorization error, we return a helpful message
-        if (error.message?.includes('API key') || error.message?.includes('auth') || error.message?.includes('400')) {
+        if (errorMessage.includes('API key') || errorMessage.includes('auth') || errorMessage.includes('400')) {
             return Response.json({
-                text: `[AUTH ERROR]: I tried to use Gemini Flash through the gateway, but the key got rejected. Make sure the gateway URL is linked properly! Error: ${error.message}`
+                text: `[AUTH ERROR]: I tried to use Gemini Flash through the gateway, but the key got rejected. Make sure the gateway URL is linked properly! Error: ${errorMessage}`
             });
         }
 
-        return Response.json({ text: `Sorry, I'm feeling under the weather. ${error.message || ''}` }, { status: 500 });
+        return Response.json({ text: `Sorry, I'm feeling under the weather. ${errorMessage}` }, { status: 500 });
     }
 }
