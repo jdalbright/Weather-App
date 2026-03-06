@@ -983,6 +983,9 @@ export default function Home() {
                           <p className="theme-muted text-[10px] leading-relaxed">
                             Your location is never stored on a server. Settings, recent searches, and custom personalities are saved locally on this device only.
                           </p>
+                          <p className="theme-muted text-[10px] leading-relaxed">
+                            <span className="theme-heading font-bold">Disclaimer:</span> AI-generated advice is for informational purposes only. Do not rely on it for medical, safety, or emergency decisions — always consult qualified professionals and follow official guidance.
+                          </p>
                         </div>
                       </div>
 
@@ -1054,6 +1057,10 @@ export default function Home() {
           nwsConnected={nwsConnected}
         />
       )}
+
+      <p className="theme-muted mt-auto pt-4 text-center text-[10px] leading-relaxed opacity-60">
+        AI-generated advice is for informational purposes only and is not a substitute for professional medical, safety, or emergency guidance. Always follow official warnings and consult qualified professionals for health decisions.
+      </p>
 
     </main>
   );
