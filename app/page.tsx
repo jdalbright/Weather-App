@@ -209,6 +209,7 @@ export default function Home() {
   const adviceRequestIdRef = useRef(0);
   const locationRequestIdRef = useRef(0);
   const lastAlertSummaryRef = useRef<string | null>(null);
+  const dismissedAlertKeysRef = useRef<string[]>([]);
   const personalityRef = useRef(personality);
   const customPersonalitiesRef = useRef<CustomPersonality[]>([]);
   const settingsAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -289,6 +290,10 @@ export default function Home() {
 
   useEffect(() => {
     localStorage.setItem(DISMISSED_ALERTS_STORAGE_KEY, JSON.stringify(dismissedAlertKeys));
+  }, [dismissedAlertKeys]);
+
+  useEffect(() => {
+    dismissedAlertKeysRef.current = dismissedAlertKeys;
   }, [dismissedAlertKeys]);
 
   useEffect(() => {
@@ -438,8 +443,8 @@ export default function Home() {
     if (data) {
       const nextWeatherAlerts = extData.alerts ?? [];
       const nextNwsAlerts = extData.nwsAlerts ?? [];
-      const nextVisibleWeatherAlerts = filterVisibleAlerts("weatherapi", nextWeatherAlerts, dismissedAlertKeys);
-      const nextVisibleNwsAlerts = filterVisibleAlerts("nws", nextNwsAlerts, dismissedAlertKeys);
+      const nextVisibleWeatherAlerts = filterVisibleAlerts("weatherapi", nextWeatherAlerts, dismissedAlertKeysRef.current);
+      const nextVisibleNwsAlerts = filterVisibleAlerts("nws", nextNwsAlerts, dismissedAlertKeysRef.current);
 
       setAirQuality(aqData);
       setMarine(marineData);
@@ -468,7 +473,7 @@ export default function Home() {
 
     setLocationLoadError("Couldn't load weather for this location. Try again.");
     setLoading(false);
-  }, [dismissedAlertKeys, fetchAIAdvice, settings.distUnit, settings.tempUnit]);
+  }, [fetchAIAdvice, settings.distUnit, settings.tempUnit]);
 
   const initialFetchRef = useRef(false);
 
@@ -717,10 +722,10 @@ export default function Home() {
   }, [scrollSettingsIntoView]);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col items-center gap-8 px-4 pt-8 pb-8 text-[var(--text-primary)] md:px-8">
+    <main className="mx-auto flex w-full min-h-screen max-w-7xl flex-col gap-8 px-4 pt-8 pb-8 text-[var(--text-primary)] md:px-8">
 
       {/* Top Search, Units & Personality Settings */}
-      <div ref={settingsAnchorRef} className="mx-auto flex w-full max-w-lg flex-col gap-8">
+      <div ref={settingsAnchorRef} className="mx-auto flex w-full sm:max-w-7xl flex-col gap-8">
 
         <div className="flex gap-2 relative z-50">
           <div className="flex-1 relative">
@@ -760,43 +765,43 @@ export default function Home() {
 
             <div className="flex flex-col gap-5">
               <div>
-                    <div className="mb-3 flex items-center justify-between px-2">
-                      <div>
-                        <h3 className="theme-section-label text-sm font-bold">Appearance</h3>
-                        <p className="theme-muted text-xs">Pick the app look or follow your device.</p>
-                      </div>
-                      <span className="surface-chip rounded-full px-3 py-1 text-xs font-bold shadow-sm">
-                        {appearanceLabel}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {appearanceOptions.map((option) => {
-                        const Icon = option.Icon;
-                        const isActive = appearance === option.id;
+                <div className="mb-3 flex items-center justify-between px-2">
+                  <div>
+                    <h3 className="theme-section-label text-sm font-bold">Appearance</h3>
+                    <p className="theme-muted text-xs">Pick the app look or follow your device.</p>
+                  </div>
+                  <span className="surface-chip rounded-full px-3 py-1 text-xs font-bold shadow-sm">
+                    {appearanceLabel}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {appearanceOptions.map((option) => {
+                    const Icon = option.Icon;
+                    const isActive = appearance === option.id;
 
-                        return (
-                          <button
-                            key={option.id}
-                            onClick={() => applyAppearanceChange(option.id)}
-                            aria-pressed={isActive}
-                            className={`rounded-[20px] border p-3 text-center transition-all ${isActive
-                              ? "bg-[var(--surface-elevated)] border-[color:var(--accent-border)] shadow-md"
-                              : "surface-tile hover:bg-[var(--surface-card-strong)] hover:border-[color:var(--border-strong)]"
-                              }`}
-                          >
-                            <div className="flex flex-col items-center gap-2">
-                              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${option.badgeClass}`}>
-                                <Icon size={18} className={option.iconClass} />
-                              </span>
-                              <span className="theme-heading text-xs font-bold">{option.label}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="theme-muted mt-3 px-2 text-xs">
-                      {appearanceOptions.find((option) => option.id === appearance)?.description}
-                    </p>
+                    return (
+                      <button
+                        key={option.id}
+                        onClick={() => applyAppearanceChange(option.id)}
+                        aria-pressed={isActive}
+                        className={`rounded-[20px] border p-3 text-center transition-all ${isActive
+                          ? "bg-[var(--surface-elevated)] border-[color:var(--accent-border)] shadow-md"
+                          : "surface-tile hover:bg-[var(--surface-card-strong)] hover:border-[color:var(--border-strong)]"
+                          }`}
+                      >
+                        <div className="flex flex-col items-center gap-2">
+                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${option.badgeClass}`}>
+                            <Icon size={18} className={option.iconClass} />
+                          </span>
+                          <span className="theme-heading text-xs font-bold">{option.label}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="theme-muted mt-3 px-2 text-xs">
+                  {appearanceOptions.find((option) => option.id === appearance)?.description}
+                </p>
               </div>
 
               <div>
@@ -871,26 +876,26 @@ export default function Home() {
               />
 
               <div>
-                  <button
-                    type="button"
-                    onClick={() => setIsAboutOpen(!isAboutOpen)}
-                    className="mb-3 flex w-full items-center justify-between gap-2 px-2 text-left"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Info size={14} className="text-[var(--text-muted)]" />
-                      <h3 className="theme-section-label text-sm font-bold">About</h3>
-                    </div>
-                    <span className={`theme-muted text-xs transition-transform duration-200 ${isAboutOpen ? "rotate-180" : ""}`}>▾</span>
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAboutOpen(!isAboutOpen)}
+                  className="mb-3 flex w-full items-center justify-between gap-2 px-2 text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <Info size={14} className="text-[var(--text-muted)]" />
+                    <h3 className="theme-section-label text-sm font-bold">About</h3>
+                  </div>
+                  <span className={`theme-muted text-xs transition-transform duration-200 ${isAboutOpen ? "rotate-180" : ""}`}>▾</span>
+                </button>
 
-                  <CollapsiblePanel open={isAboutOpen}>
-                    <div className="surface-tile rounded-[24px] p-4">
-                      <p className="theme-heading text-sm font-bold">Weather App</p>
-                      <p className="theme-muted mt-0.5 text-xs">
-                        Personality-driven forecasts powered by multiple open data sources and AI.
-                      </p>
+                <CollapsiblePanel open={isAboutOpen}>
+                  <div className="surface-tile rounded-[24px] p-4">
+                    <p className="theme-heading text-sm font-bold">Weather App</p>
+                    <p className="theme-muted mt-0.5 text-xs">
+                      Personality-driven forecasts powered by multiple open data sources and AI.
+                    </p>
 
-                      <div className="mt-4 flex flex-col gap-3">
+                    <div className="mt-4 flex flex-col gap-3">
 
                       {/* Always-on data sources */}
                       <div>
@@ -969,9 +974,9 @@ export default function Home() {
                         </div>
                       </div>
 
-                      </div>
                     </div>
-                  </CollapsiblePanel>
+                  </div>
+                </CollapsiblePanel>
               </div>
 
             </div>

@@ -68,16 +68,16 @@ import {
 import { type Personality } from "@/lib/personalities";
 
 const IconMap: Record<string, { icon: LucideIcon; className: string; strokeWidth?: number }> = {
-    "sun": { icon: Sun, className: "text-yellow-500" },
-    "moon": { icon: Moon, className: "text-indigo-500" },
-    "cloud-sun": { icon: CloudSun, className: "text-amber-500" },
-    "cloud-moon": { icon: CloudMoon, className: "text-indigo-500" },
-    "cloud": { icon: Cloud, className: "text-slate-500" },
-    "cloud-rain": { icon: CloudRain, className: "text-sky-500" },
-    "cloud-heavy-rain": { icon: CloudRain, className: "text-blue-600", strokeWidth: 2.2 },
-    "cloud-snow": { icon: CloudSnow, className: "text-cyan-500" },
-    "cloud-fog": { icon: CloudFog, className: "text-slate-500" },
-    "cloud-lightning": { icon: CloudLightning, className: "text-amber-500" },
+    "sun": { icon: Sun, className: "text-sun-yellow" },
+    "moon": { icon: Moon, className: "text-indigo-400" },
+    "cloud-sun": { icon: CloudSun, className: "text-sun-orange" },
+    "cloud-moon": { icon: CloudMoon, className: "text-indigo-400" },
+    "cloud": { icon: Cloud, className: "text-cloud-gray" },
+    "cloud-rain": { icon: CloudRain, className: "text-rain-blue" },
+    "cloud-heavy-rain": { icon: CloudRain, className: "text-rain-dark", strokeWidth: 2.2 },
+    "cloud-snow": { icon: CloudSnow, className: "text-sky-blue" },
+    "cloud-fog": { icon: CloudFog, className: "text-cloud-gray" },
+    "cloud-lightning": { icon: CloudLightning, className: "text-sun-orange" },
 };
 
 const PersonalityIconMap = {
@@ -100,8 +100,8 @@ const statTileClass = "surface-tile flex items-center gap-3 rounded-2xl p-3";
 const statValueClass = "theme-heading font-semibold";
 const forecastTileClass = "surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center gap-2 rounded-2xl p-3";
 const forecastDayTileClass = "surface-tile flex min-w-[80px] shrink-0 snap-start flex-col items-center justify-between gap-1 rounded-2xl p-3 h-[120px]";
-const heroCardClass = "surface-card-strong relative overflow-hidden rounded-[32px] px-5 py-6 sm:px-6";
-const insightGridClass = "mt-3 grid w-full max-w-[26rem] grid-cols-2 gap-2";
+const heroCardClass = "surface-card-strong relative overflow-hidden rounded-[32px] px-5 py-6 sm:px-8 sm:py-10";
+const insightGridClass = "mt-3 grid w-full max-w-[26rem] grid-cols-2 gap-2 sm:max-w-none sm:grid-cols-3 sm:gap-3";
 const insightPillClass = "flex min-h-[76px] w-full min-w-0 items-center justify-between gap-3 rounded-[24px] border border-[color:var(--border-soft)] bg-[var(--surface-chip)] text-[var(--text-secondary)] px-4 py-3.5 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover:border-[color:var(--border-strong)] hover:shadow-[var(--shadow-soft)]";
 const insightPillOpenClass = "border-[color:var(--accent-border)] bg-[var(--surface-elevated)] shadow-[var(--shadow-soft)]";
 const sectionAccordionButtonClass = "surface-tile flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[24px] px-4 py-3 text-left transition-all hover:border-[color:var(--border-strong)] hover:bg-[var(--surface-elevated)]";
@@ -427,8 +427,526 @@ export default function WeatherCard({
         }));
     };
 
+    const detailedContent = (
+        <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-3">
+                <button
+                    type="button"
+                    onClick={() => toggleDetailSection("conditions")}
+                    className={sectionAccordionButtonClass}
+                >
+                    <div className="min-w-0">
+                        <p className="theme-heading text-sm font-bold">Right Now</p>
+                        <p className="theme-muted text-xs">Core stats, air quality, pollen, and station readings.</p>
+                    </div>
+                    <ChevronDown className={`theme-subtle h-5 w-5 shrink-0 transition-transform ${openDetailSections.conditions ? "rotate-180" : ""}`} />
+                </button>
+                <CollapsiblePanel open={openDetailSections.conditions} className="w-full">
+                    <div className="flex flex-col gap-6 pt-2">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className={statTileClass}>
+                                <Thermometer className="text-orange-500" size={20} />
+                                <div className="flex flex-col">
+                                    <span className="theme-section-label text-xs font-bold">Feels Like</span>
+                                    <span className={statValueClass}>{feelsLike}&deg;</span>
+                                </div>
+                            </div>
+                            <div className={statTileClass}>
+                                <Wind className="text-blue-400" size={20} />
+                                <div className="flex flex-col">
+                                    <span className="theme-section-label text-xs font-bold">Wind</span>
+                                    <span className={statValueClass}>
+                                        {formatWindSpeed(current.wind_speed_10m, weatherData.current_units.wind_speed_10m)}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className={statTileClass}>
+                                <Droplets className="text-blue-500" size={20} />
+                                <div className="flex flex-col">
+                                    <span className="theme-section-label text-xs font-bold">Precip Chance</span>
+                                    <span className={statValueClass}>{currentPrecipChanceLabel}</span>
+                                </div>
+                            </div>
+                            <div className={statTileClass}>
+                                <Droplets className="text-cyan-500" size={20} />
+                                <div className="flex flex-col">
+                                    <span className="theme-section-label text-xs font-bold">Humidity</span>
+                                    <span className={statValueClass}>{current.relative_humidity_2m}%</span>
+                                </div>
+                            </div>
+                            <div className={statTileClass}>
+                                <SunDim className="text-yellow-500" size={20} />
+                                <div className="flex flex-col">
+                                    <span className="theme-section-label text-xs font-bold">UV Index</span>
+                                    <span className={statValueClass}>{weatherData.daily.uv_index_max[0]}</span>
+                                </div>
+                            </div>
+                            <div className={statTileClass}>
+                                <Cloud className="text-[var(--text-muted)]" size={20} />
+                                <div className="flex flex-col">
+                                    <span className="theme-section-label text-xs font-bold">Cloud Cover</span>
+                                    <span className={statValueClass}>{current.cloud_cover}%</span>
+                                </div>
+                            </div>
+                            <div className={statTileClass}>
+                                <Eye className="text-indigo-400" size={20} />
+                                <div className="flex flex-col">
+                                    <span className="theme-section-label text-xs font-bold">Visibility</span>
+                                    <span className={statValueClass}>
+                                        {formatVisibility(current.visibility, distUnit, weatherData.current_units.visibility)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {aqiValue !== null && aqiLevel && (
+                            <div className="flex flex-col gap-2">
+                                <span className={sectionLabelClass}>Air Quality</span>
+                                <div className="surface-tile rounded-2xl p-4 flex flex-col gap-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-2xl font-bold">{aqiValue}</span>
+                                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${aqiLevel.bg} ${aqiLevel.color}`}>
+                                                {aqiLevel.label}
+                                            </span>
+                                        </div>
+                                        <span className="theme-muted text-xs font-medium">US AQI</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-3">
+                                        <div className="surface-tile-strong rounded-xl p-2">
+                                            <p className="theme-section-label text-[10px] font-bold">PM2.5</p>
+                                            <p className="font-semibold text-sm">{airQuality?.current?.pm2_5?.toFixed(1) ?? "—"}</p>
+                                        </div>
+                                        <div className="surface-tile-strong rounded-xl p-2">
+                                            <p className="theme-section-label text-[10px] font-bold">PM10</p>
+                                            <p className="font-semibold text-sm">{airQuality?.current?.pm10?.toFixed(1) ?? "—"}</p>
+                                        </div>
+                                        <div className="surface-tile-strong rounded-xl p-2">
+                                            <p className="theme-section-label text-[10px] font-bold">Ozone</p>
+                                            <p className="font-semibold text-sm">{airQuality?.current?.ozone?.toFixed(0) ?? "—"}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {hasPollenData && (
+                            <div className="flex flex-col gap-2">
+                                <span className={sectionLabelClass}>Pollen</span>
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                    {grassPollen !== null && (
+                                        <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
+                                            <Leaf className="text-green-500" size={18} />
+                                            <span className="theme-section-label text-[10px] font-bold">Grass</span>
+                                            <span className="font-semibold text-sm">{grassPollen.toFixed(0)}</span>
+                                        </div>
+                                    )}
+                                    {birchPollen !== null && (
+                                        <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
+                                            <Leaf className="text-lime-600" size={18} />
+                                            <span className="theme-section-label text-[10px] font-bold">Birch</span>
+                                            <span className="font-semibold text-sm">{birchPollen.toFixed(0)}</span>
+                                        </div>
+                                    )}
+                                    {alderPollen !== null && (
+                                        <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
+                                            <Leaf className="text-emerald-600" size={18} />
+                                            <span className="theme-section-label text-[10px] font-bold">Alder</span>
+                                            <span className="font-semibold text-sm">{alderPollen.toFixed(0)}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {metar && metarTempDisplay != null && (
+                            <div className="flex flex-col gap-2">
+                                <span className={sectionLabelClass}>Actual Observed</span>
+                                <div className="surface-tile rounded-2xl p-4 flex flex-col gap-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Radio className="text-indigo-500" size={18} />
+                                            <div>
+                                                <p className="theme-heading font-bold text-sm">{metar.name || metar.icaoId}</p>
+                                                <p className="theme-muted text-xs">Nearest weather station</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-2xl font-bold">{metarTempDisplay}&deg;</p>
+                                            {metarTempDiff != null && Math.abs(metarTempDiff) >= 1 && (
+                                                <div className="flex items-center gap-1 justify-end">
+                                                    {metarTempDiff > 0
+                                                        ? <TrendingUp size={12} className="text-orange-500" />
+                                                        : metarTempDiff < 0
+                                                            ? <TrendingDown size={12} className="text-blue-500" />
+                                                            : <Minus size={12} className="text-[var(--text-muted)]" />
+                                                    }
+                                                    <span className={`text-xs font-bold ${metarTempDiff > 0 ? "text-orange-500" : "text-blue-500"}`}>
+                                                        {metarTempDiff > 0 ? "+" : ""}{metarTempDiff}° vs forecast
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 text-center">
+                                        <div className="surface-tile-strong rounded-xl p-2">
+                                            <p className="theme-section-label text-[10px] font-bold">Wind</p>
+                                            <p className="font-semibold text-sm">
+                                                {waveDirectionToCardinal(metar.wind_dir)} {metar.wind_speed} kt
+                                            </p>
+                                        </div>
+                                        <div className="surface-tile-strong rounded-xl p-2">
+                                            <p className="theme-section-label text-[10px] font-bold">Visibility</p>
+                                            <p className="font-semibold text-sm">{metar.visibility} mi</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </CollapsiblePanel>
+            </div>
+
+            <div className="flex flex-col gap-3">
+                <button
+                    type="button"
+                    onClick={() => toggleDetailSection("forecast")}
+                    className={sectionAccordionButtonClass}
+                >
+                    <div className="min-w-0">
+                        <p className="theme-heading text-sm font-bold">Forecast Flow</p>
+                        <p className="theme-muted text-xs">Hourly and multi-day outlook with swipe cues.</p>
+                    </div>
+                    <ChevronDown className={`theme-subtle h-5 w-5 shrink-0 transition-transform ${openDetailSections.forecast ? "rotate-180" : ""}`} />
+                </button>
+                <CollapsiblePanel open={openDetailSections.forecast} className="w-full">
+                    <div className="flex flex-col gap-6 pt-2">
+                        <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                                <span className={sectionLabelClass}>Hourly Forecast</span>
+                                <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
+                                    Swipe
+                                </span>
+                            </div>
+                            <div className="scroll-fade-horizontal">
+                                <div className="flex overflow-x-auto gap-3 px-2 pb-4 pt-2 snap-x hide-scrollbar">
+                                    {(() => {
+                                        const localNow = getLocalTimeForOffset(weatherData.utc_offset_seconds);
+                                        const oneHourAgo = new Date(localNow.getTime() - 3600000);
+                                        const twelveHoursFromNow = new Date(localNow.getTime() + 12 * 3600000);
+                                        const events: {
+                                            type: "hour" | "sunrise" | "sunset";
+                                            time: Date;
+                                            temp?: number;
+                                            iconCode?: number;
+                                            isDay?: number;
+                                            pop?: number;
+                                        }[] = [];
+
+                                        weatherData.hourly.time.slice(0, 48).forEach((timeString: string, index: number) => {
+                                            const hourDate = parseLocationDateTime(timeString);
+                                            if (hourDate >= oneHourAgo && hourDate <= twelveHoursFromNow) {
+                                                events.push({
+                                                    type: "hour",
+                                                    time: hourDate,
+                                                    temp: Math.round(weatherData.hourly.temperature_2m[index]),
+                                                    iconCode: weatherData.hourly.weather_code[index],
+                                                    isDay: weatherData.hourly.is_day[index],
+                                                    pop: weatherData.hourly.precipitation_probability?.[index]
+                                                });
+                                            }
+                                        });
+
+                                        weatherData.daily.time.slice(0, 3).forEach((_: string, index: number) => {
+                                            const sunriseStr = weatherData.daily.sunrise?.[index];
+                                            const sunsetStr = weatherData.daily.sunset?.[index];
+                                            if (sunriseStr) {
+                                                const sunriseDate = parseLocationDateTime(sunriseStr);
+                                                if (sunriseDate >= localNow && sunriseDate <= twelveHoursFromNow) {
+                                                    events.push({ type: "sunrise", time: sunriseDate });
+                                                }
+                                            }
+                                            if (sunsetStr) {
+                                                const sunsetDate = parseLocationDateTime(sunsetStr);
+                                                if (sunsetDate >= localNow && sunsetDate <= twelveHoursFromNow) {
+                                                    events.push({ type: "sunset", time: sunsetDate });
+                                                }
+                                            }
+                                        });
+
+                                        events.sort((a, b) => a.time.getTime() - b.time.getTime());
+
+                                        return events.map((event, idx) => {
+                                            if (event.type === "hour") {
+                                                const hIconName = getWeatherIconFromCode(event.iconCode ?? 0, event.isDay ?? 1);
+                                                const hourlyIconConfig = IconMap[hIconName] || IconMap["cloud"];
+                                                const HIcon = hourlyIconConfig.icon;
+                                                return (
+                                                    <div key={`hour-${idx}`} className={forecastTileClass}>
+                                                        <span className="font-semibold text-sm">{format(event.time, "h a")}</span>
+                                                        <HIcon
+                                                            size={24}
+                                                            strokeWidth={hourlyIconConfig.strokeWidth ?? 1.9}
+                                                            className={hourlyIconConfig.className}
+                                                        />
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="font-bold">{event.temp}&deg;</span>
+                                                            {shouldShowForecastChance(event.pop) && (
+                                                                <span className="text-[10px] font-bold text-blue-500">{event.pop}%</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            if (event.type === "sunrise") {
+                                                return (
+                                                    <div key={`sunrise-${idx}`} className="surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-orange-200/70 bg-gradient-to-t from-orange-200/55 to-[var(--surface-card-strong)] p-3">
+                                                        <span className="font-semibold text-sm">{format(event.time, "h:mm")}</span>
+                                                        <Sunrise size={24} className="text-orange-500" />
+                                                        <span className="font-bold text-xs">Sunrise</span>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div key={`sunset-${idx}`} className="surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-indigo-200/70 bg-gradient-to-t from-indigo-200/40 to-[var(--surface-card-strong)] p-3">
+                                                    <span className="font-semibold text-sm">{format(event.time, "h:mm")}</span>
+                                                    <Sunset size={24} className="text-indigo-500" />
+                                                    <span className="font-bold text-xs">Sunset</span>
+                                                </div>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between">
+                                <span className={sectionLabelClass}>16-Day Forecast</span>
+                                <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
+                                    Swipe
+                                </span>
+                            </div>
+                            <div className="scroll-fade-horizontal">
+                                <div className="flex overflow-x-auto gap-3 px-2 pb-4 pt-2 snap-x hide-scrollbar">
+                                    {weatherData.daily.time.slice(0, 16).map((timeString: string, index: number) => {
+                                        const dayDate = parseLocationDate(timeString);
+                                        const dayCode = weatherData.daily.weather_code[index];
+                                        const dayHigh = Math.round(weatherData.daily.temperature_2m_max[index]);
+                                        const dayLow = Math.round(weatherData.daily.temperature_2m_min[index]);
+                                        const dayPrecipProbability = weatherData.daily.precipitation_probability_max?.[index] ?? 0;
+                                        const dayRainTotal = (weatherData.daily.rain_sum?.[index] ?? 0) + (weatherData.daily.showers_sum?.[index] ?? 0);
+                                        const daySnowfallTotal = weatherData.daily.snowfall_sum?.[index] ?? 0;
+                                        const showRainChance = shouldShowForecastChance(dayPrecipProbability)
+                                            && dayRainTotal > 0
+                                            && daySnowfallTotal === 0
+                                            && isLiquidPrecipitationCode(dayCode);
+                                        const dIconName = getWeatherIconFromCode(dayCode, 1);
+                                        const dailyIconConfig = IconMap[dIconName] || IconMap["cloud"];
+                                        const DIcon = dailyIconConfig.icon;
+
+                                        return (
+                                            <div key={timeString} className={forecastDayTileClass}>
+                                                <span className="font-semibold text-sm">{index === 0 ? "Today" : format(dayDate, "MMM d")}</span>
+                                                <DIcon
+                                                    size={28}
+                                                    strokeWidth={dailyIconConfig.strokeWidth ?? 1.9}
+                                                    className={`${dailyIconConfig.className} my-1 flex-shrink-0`}
+                                                />
+                                                {showRainChance && (
+                                                    <span className="text-[10px] font-bold text-blue-500 -mt-1 mb-1">{dayPrecipProbability}%</span>
+                                                )}
+                                                <div className="flex items-center gap-2 text-xs font-bold w-full justify-between">
+                                                    <span className="theme-muted font-medium">{dayLow}&deg;</span>
+                                                    <span>{dayHigh}&deg;</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </CollapsiblePanel>
+            </div>
+
+            <div className="flex flex-col gap-3">
+                <button
+                    type="button"
+                    onClick={() => toggleDetailSection("extras")}
+                    className={sectionAccordionButtonClass}
+                >
+                    <div className="min-w-0">
+                        <p className="theme-heading text-sm font-bold">Extras</p>
+                        <p className="theme-muted text-xs">Moon, marine, and historical context.</p>
+                    </div>
+                    <ChevronDown className={`theme-subtle h-5 w-5 shrink-0 transition-transform ${openDetailSections.extras ? "rotate-180" : ""}`} />
+                </button>
+                <CollapsiblePanel open={openDetailSections.extras} className="w-full">
+                    <div className="flex flex-col gap-6 pt-2">
+                        {astronomy && (
+                            <div className="flex flex-col gap-2">
+                                <span className={sectionLabelClass}>Moon</span>
+                                <div className="surface-tile rounded-2xl p-4 flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-5xl leading-none">{getMoonPhaseEmoji(astronomy.moon_phase)}</span>
+                                        <div>
+                                            <p className="theme-heading font-bold">{astronomy.moon_phase}</p>
+                                            <p className="theme-muted text-xs">{astronomy.moon_illumination}% illuminated</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-1 text-right text-sm">
+                                        {astronomy.moonrise && astronomy.moonrise !== "No moonrise" && (
+                                            <div className="flex items-center gap-1 justify-end">
+                                                <span className="theme-muted text-xs">Rise</span>
+                                                <span className="font-semibold">{astronomy.moonrise}</span>
+                                            </div>
+                                        )}
+                                        {astronomy.moonset && astronomy.moonset !== "No moonset" && (
+                                            <div className="flex items-center gap-1 justify-end">
+                                                <span className="theme-muted text-xs">Set</span>
+                                                <span className="font-semibold">{astronomy.moonset}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {marine && marine.current && (
+                            <div className="flex flex-col gap-2">
+                                <span className={sectionLabelClass}>Marine</span>
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                    <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
+                                        <Waves className="text-blue-500" size={18} />
+                                        <span className="theme-section-label text-[10px] font-bold">Height</span>
+                                        <span className="font-semibold text-sm">
+                                            {marine.current.wave_height != null
+                                                ? distUnit === "mph"
+                                                    ? `${(marine.current.wave_height * 3.281).toFixed(1)} ft`
+                                                    : `${marine.current.wave_height.toFixed(1)} m`
+                                                : "—"}
+                                        </span>
+                                    </div>
+                                    <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
+                                        <Waves className="text-cyan-500" size={18} />
+                                        <span className="theme-section-label text-[10px] font-bold">Direction</span>
+                                        <span className="font-semibold text-sm">{marine.current.wave_direction != null ? waveDirectionToCardinal(marine.current.wave_direction) : "—"}</span>
+                                    </div>
+                                    <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
+                                        <Waves className="text-teal-500" size={18} />
+                                        <span className="theme-section-label text-[10px] font-bold">Period</span>
+                                        <span className="font-semibold text-sm">{marine.current.wave_period != null ? `${marine.current.wave_period.toFixed(1)}s` : "—"}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {(histHigh !== null || climateNormal || riverDischarge !== null) && (
+                            <div className="flex flex-col gap-2">
+                                <span className={sectionLabelClass}>Historical Context</span>
+                                <div className="surface-tile rounded-2xl p-4 flex flex-col gap-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="theme-section-label text-xs font-bold">Today</span>
+                                        <span className="font-bold text-sm">H: {dailyHigh}&deg; / L: {dailyLow}&deg;</span>
+                                    </div>
+                                    {histHigh !== null && histLow !== null && (
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <History className="text-violet-500" size={14} />
+                                                <span className="theme-section-label text-xs font-bold">Last year</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-semibold text-sm">H: {histHigh}&deg; / L: {histLow}&deg;</span>
+                                                {(() => {
+                                                    const diff = dailyHigh - histHigh;
+                                                    if (Math.abs(diff) < 1) return null;
+                                                    return (
+                                                        <span className={`text-xs font-bold ${diff > 0 ? "text-orange-500" : "text-blue-500"}`}>
+                                                            {diff > 0 ? "+" : ""}{diff}&deg;
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {climateNormal && (
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <span className="surface-chip-muted rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase">3yr avg</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-semibold text-sm">H: {climateNormal.avg_high}&deg; / L: {climateNormal.avg_low}&deg;</span>
+                                                {(() => {
+                                                    const diff = dailyHigh - climateNormal.avg_high;
+                                                    if (Math.abs(diff) < 1) return <span className="theme-subtle text-xs font-bold">Normal</span>;
+                                                    return (
+                                                        <span className={`text-xs font-bold ${diff > 0 ? "text-orange-500" : "text-blue-500"}`}>
+                                                            {diff > 0 ? "+" : ""}{diff}&deg; vs avg
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {riverDischarge !== null && (
+                                        <>
+                                            <div className="theme-divider border-t" />
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Waves className="text-blue-700" size={14} />
+                                                    <span className="theme-section-label text-xs font-bold">River Discharge</span>
+                                                </div>
+                                                <span className="font-semibold text-sm">{riverDischarge.toFixed(1)} m³/s</span>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </CollapsiblePanel>
+            </div>
+
+            <button
+                type="button"
+                onClick={() => setShowDataSources(true)}
+                className="surface-tile flex min-h-[56px] flex-col gap-3 rounded-[24px] px-4 py-4 text-left transition-all hover:border-[color:var(--border-strong)] hover:bg-[var(--surface-elevated)]"
+            >
+                <div className="flex w-full items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="theme-heading text-sm font-bold">About Data</p>
+                        <p className="theme-muted text-xs">
+                            {activeSourceEntries.length} {activeSourceEntries.length === 1 ? "source is" : "sources are"} supporting the sections currently open.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold shadow-sm">
+                            {activeSourceEntries.length}
+                        </span>
+                        <ChevronDown className="theme-subtle -rotate-90 h-5 w-5" />
+                    </div>
+                </div>
+                <div className="flex w-full flex-wrap gap-2">
+                    {visibleSourceSummary.map(({ name }) => (
+                        <span key={name} className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold shadow-sm">
+                            {name}
+                        </span>
+                    ))}
+                    {activeSourceEntries.length > visibleSourceSummary.length ? (
+                        <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold">
+                            +{activeSourceEntries.length - visibleSourceSummary.length} more
+                        </span>
+                    ) : null}
+                </div>
+            </button>
+        </div>
+    );
+
     return (
-        <div className="weather-card-shell flex flex-col gap-6 w-full max-w-lg mx-auto overflow-hidden transition-all duration-500">
+        <div className="weather-card-shell mx-auto flex w-full max-w-7xl flex-col gap-6 sm:overflow-visible overflow-hidden">
 
             {/* Alerts banner */}
             {allAlerts.length > 0 && (
@@ -485,869 +1003,366 @@ export default function WeatherCard({
                 </div>
             )}
 
-            <div className={heroCardClass}>
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_30%)]" />
-                <div className="pointer-events-none absolute -left-12 top-8 h-32 w-32 rounded-full bg-[var(--weather-glow)] blur-3xl opacity-40" />
-                <div className="pointer-events-none absolute -right-10 bottom-6 h-28 w-28 rounded-full bg-[rgba(125,211,252,0.12)] blur-3xl" />
+            <div className="flex flex-col sm:flex-row sm:flex-nowrap gap-6 w-full items-start flex-1 min-w-0">
+                {/* Left Column (Hero & Personality) */}
+                <div className="flex flex-col gap-6 w-full sm:w-[42%] sm:min-w-[340px] sm:flex-none sm:flex-shrink-0 sm:sticky sm:top-[5.5rem] sm:-mt-1.5 sm:pb-[5.5rem]">
+                    <div className={heroCardClass}>
+                        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,var(--weather-glow),transparent_48%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_30%)]" />
+                        <div className="pointer-events-none absolute -left-12 top-8 h-32 w-32 rounded-full bg-[var(--weather-glow)] blur-3xl opacity-40" />
+                        <div className="pointer-events-none absolute -right-10 bottom-6 h-28 w-28 rounded-full bg-[var(--accent-soft)] blur-3xl" />
 
-                {/* Top Header - Always visible */}
-                <div className="relative flex flex-col items-center text-center">
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                        <span className="surface-chip-muted rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
-                            {currentCondition}
-                        </span>
-                        <span className="surface-chip-muted rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
-                            Local {localTimeLabel}
-                        </span>
-                    </div>
-
-                    <div className="mt-5 flex flex-col items-center gap-3">
-                        <div className={`flex h-24 w-24 items-center justify-center rounded-full ${iconBadgeClass}`}>
-                            <IconComponent
-                                size={iconSize}
-                                strokeWidth={iconConfig.strokeWidth ?? 1.75}
-                                className={iconConfig.className}
-                            />
-                        </div>
-                        <div className="flex flex-col items-center gap-1">
-                            <span className="theme-heading flex items-center justify-center gap-2 text-6xl font-bold tracking-tight">
-                                {displayTemp}&deg;
-                            </span>
-                            <span
-                                className="theme-heading max-w-[16rem] text-[1.7rem] font-bold capitalize leading-none sm:max-w-none"
-                                title={locationName || "Current Location"}
-                            >
-                                {primaryLocationName}
-                            </span>
-                            {secondaryLocationName ? (
-                                <span className="theme-muted max-w-[18rem] text-center text-sm font-semibold leading-snug sm:max-w-none">
-                                    {secondaryLocationName}
+                        {/* Top Header - Always visible */}
+                        <div className="relative flex flex-col items-center text-center">
+                            <div className="flex flex-wrap items-center justify-center gap-2">
+                                <span className="surface-chip-muted rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
+                                    {currentCondition}
                                 </span>
-                            ) : null}
-                            <span className="theme-muted text-sm font-semibold">
-                                H: {dailyHigh}&deg; L: {dailyLow}&deg;
-                            </span>
-                        </div>
-                    </div>
-
-                    {(hasConfidencePill || hasStationPill || hasMinutelyPill) && (
-                        <div className={insightGridClass}>
-                            {conf && forecastConfidence && (
-                                <button
-                                    onClick={() => setShowConfidenceDetail(v => !v)}
-                                    className={`${insightPillClass} ${showConfidenceDetail ? insightPillOpenClass : ""} ${!hasStationPill ? "col-span-2" : ""}`}
-                                >
-                                    <div className="flex min-w-0 items-center gap-3">
-                                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${confidenceDotClass}`} />
-                                        <div className="min-w-0">
-                                            <p className="theme-section-label text-[10px] font-bold tracking-[0.2em]">Models</p>
-                                            <p className="theme-heading mt-1 truncate text-sm font-semibold leading-tight">
-                                                {confidenceSummaryLabel ?? "Forecast spread"}
-                                            </p>
-                                            <p className="theme-subtle mt-0.5 text-xs font-medium">
-                                                {confidenceAggregatedTemp}&deg; &plusmn;{forecastConfidence.spread}&deg;
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showConfidenceDetail ? "rotate-180" : ""}`} />
-                                </button>
-                            )}
-                            {metarTempDisplay != null && (
-                                <button
-                                    onClick={() => setShowStationDetail(v => !v)}
-                                    className={`${insightPillClass} ${showStationDetail ? insightPillOpenClass : ""} ${stationNeedsAttention ? "border-orange-300/70 bg-[linear-gradient(135deg,rgba(251,146,60,0.16),rgba(255,255,255,0.08))]" : ""} ${!hasConfidencePill ? "col-span-2" : ""}`}
-                                >
-                                    <div className="min-w-0">
-                                        <p className="theme-section-label text-[10px] font-bold tracking-[0.2em]">Station</p>
-                                        <p className="theme-heading mt-1 truncate text-sm font-semibold leading-tight">
-                                            {metarTempDisplay}&deg; observed
-                                        </p>
-                                        <p className="theme-subtle mt-0.5 truncate text-xs font-medium">
-                                            {showStationTempDelta && metarTempDiff != null
-                                                ? `${metarTempDiff > 0 ? "+" : ""}${metarTempDiff}° vs main temp`
-                                                : stationDistanceDisplay ?? stationIcaoId}
-                                        </p>
-                                    </div>
-                                    <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showStationDetail ? "rotate-180" : ""}`} />
-                                </button>
-                            )}
-                            {showMinutelyBanner && rainSummary && (
-                                <button
-                                    onClick={() => setShowMinutelyDetail(v => !v)}
-                                    className={`${insightPillClass} ${showMinutelyDetail ? insightPillOpenClass : ""} ${minutelyPillToneClass} col-span-2`}
-                                >
-                                    <div className="flex min-w-0 items-center gap-3">
-                                        <CloudRain className={`${minutelyIconClass} shrink-0`} size={16} />
-                                        <div className="min-w-0">
-                                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">{minutelyWindowLabel}</p>
-                                            <p className="mt-1 truncate text-sm font-semibold leading-tight">
-                                                {minutelyStatusLabel}
-                                            </p>
-                                            <p className="mt-0.5 truncate text-xs font-medium opacity-75">
-                                                Next-hour rain trend in 5-minute steps
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showMinutelyDetail ? "rotate-180" : ""}`} />
-                                </button>
-                            )}
-                        </div>
-                    )}
-
-                    <CollapsiblePanel open={Boolean(conf && forecastConfidence && showConfidenceDetail)} className="mt-2 w-full">
-                        <div className="surface-tile rounded-2xl border px-4 py-3">
-                            <div className="mb-3 flex items-center justify-between border-b border-[color:var(--border-soft)] pb-2">
-                                <div className="flex items-center gap-2">
-                                    <span className={`h-2 w-2 rounded-full ${confidenceDotClass}`} />
-                                    <span className="theme-section-label text-xs font-bold tracking-wide">Model Average</span>
-                                </div>
-                                <span className="theme-heading text-sm font-bold">{confidenceAggregatedTemp}&deg;</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                                {confidenceModelNames.map((name, i) => (
-                                    confidenceModelTemps[i] != null && (
-                                        <div key={name} className="flex items-center justify-between gap-2">
-                                            <span className="theme-muted text-xs font-medium">{name}</span>
-                                            <span className="theme-heading text-xs font-bold">{confidenceModelTemps[i]}&deg;</span>
-                                        </div>
-                                    )
-                                ))}
-                            </div>
-                        </div>
-                    </CollapsiblePanel>
-                    <CollapsiblePanel open={Boolean(metar && metarTempDisplay != null && showStationDetail)} className="mt-2 w-full">
-                        <div className="surface-tile rounded-2xl border px-4 py-3 text-left">
-                            <div className="mb-3 flex items-start justify-between gap-3 border-b border-[color:var(--border-soft)] pb-2">
-                                <div className="min-w-0">
-                                    <p className="theme-section-label text-xs font-bold tracking-wide">Nearest Station</p>
-                                    <p className="theme-heading truncate text-sm font-bold">{stationName}</p>
-                                    <p className="theme-muted text-xs">{stationIcaoId}{stationDistanceDisplay ? ` · ${stationDistanceDisplay}` : ""}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="theme-heading text-sm font-bold">{metarTempDisplay}&deg;</p>
-                                    {showStationTempDelta && metarTempDiff != null && (
-                                        <p className={`text-xs font-bold ${metarTempDiff > 0 ? "text-orange-500" : "text-blue-500"}`}>
-                                            {metarTempDiff > 0 ? "+" : ""}{metarTempDiff}&deg; vs main temp
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="surface-tile-strong rounded-xl p-2">
-                                    <p className="theme-section-label text-[10px] font-bold">Wind</p>
-                                    <p className="theme-heading text-sm font-semibold">
-                                        {stationWind}
-                                    </p>
-                                </div>
-                                <div className="surface-tile-strong rounded-xl p-2">
-                                    <p className="theme-section-label text-[10px] font-bold">Visibility</p>
-                                    <p className="theme-heading text-sm font-semibold">{stationVisibility}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </CollapsiblePanel>
-                    <CollapsiblePanel open={Boolean(showMinutelyBanner && rainSummary && showMinutelyDetail)} className="mt-2 w-full">
-                        <div className={`w-full rounded-2xl border px-4 py-3 text-left ${minutelyBannerClass}`}>
-                            <div className="mb-3 flex items-start justify-between gap-3 border-b border-current/10 pb-2">
-                                <div className="min-w-0">
-                                    <p className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-70">
-                                        Short-range rain trend
-                                    </p>
-                                    <p className="text-sm font-bold">
-                                        Precipitation over the next hour
-                                    </p>
-                                </div>
-                                <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${minutelyBadgeClass}`}>
-                                    {minutelyStatusLabel}
+                                <span className="surface-chip-muted rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em]">
+                                    Local {localTimeLabel}
                                 </span>
                             </div>
-                            <div className="flex items-start gap-3">
-                                <CloudRain className={`${minutelyIconClass} mt-0.5 shrink-0`} size={18} />
-                                <p className="text-sm font-semibold leading-relaxed">
-                                    {minutelySummaryText}
-                                </p>
-                            </div>
-                            {minutelyTimeline.length > 0 && (
-                                <div className="mt-4">
-                                    <div className="mb-2 flex items-center justify-between">
-                                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] opacity-70">
-                                            Timeline
-                                        </p>
-                                        <p className="text-xs font-medium opacity-80">
-                                            5-minute steps
-                                        </p>
-                                    </div>
-                                    <div className="surface-tile-strong rounded-2xl px-3 py-4">
-                                        <div className="flex h-24 items-end gap-1.5">
-                                            {minutelyTimeline.map((point) => {
-                                                const probabilityHeight = Math.max(8, Math.round(point.precip_probability * 100));
-                                                const intensityRatio = maxMinutelyIntensity > 0
-                                                    ? point.precip_intensity / maxMinutelyIntensity
-                                                    : 0;
-                                                const barHeight = point.precip_probability > 0 || point.precip_intensity > 0
-                                                    ? Math.max(probabilityHeight, Math.round(intensityRatio * 100))
-                                                    : 8;
 
-                                                return (
-                                                    <div key={point.offset_minutes} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
-                                                        <div className="flex h-full w-full items-end">
-                                                            <div
-                                                                className={`w-full rounded-full transition-all ${point.precip_probability >= 0.5 || point.precip_intensity > 0.05
-                                                                    ? "bg-gradient-to-t from-sky-500 to-cyan-300"
-                                                                    : point.precip_probability > 0 || point.precip_intensity > 0
-                                                                        ? "bg-gradient-to-t from-sky-400/70 to-cyan-200/70"
-                                                                        : "bg-[color:var(--border-soft)]"
-                                                                    }`}
-                                                                style={{ height: `${barHeight}%` }}
-                                                                title={`${point.offset_minutes} min: ${Math.round(point.precip_probability * 100)}%`}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                        <div className="mt-3 flex justify-between text-[10px] font-bold uppercase tracking-wide opacity-70">
-                                            <span>Now</span>
-                                            <span>15m</span>
-                                            <span>30m</span>
-                                            <span>45m</span>
-                                            <span>1h</span>
-                                        </div>
-                                    </div>
-                                    <div className="mt-3 flex flex-wrap gap-2">
-                                        {shouldShowForecastChance(peakMinutelyChance) ? (
-                                            <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
-                                                Peak chance {peakMinutelyChance}%
-                                            </span>
-                                        ) : (
-                                            <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
-                                                Weak signal
-                                            </span>
-                                        )}
-                                        <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
-                                            {minutelyGuidanceText}
+                            <div className="mt-5 flex flex-col items-center gap-3">
+                                <div className={`flex h-24 w-24 items-center justify-center rounded-full ${iconBadgeClass}`}>
+                                    <IconComponent
+                                        size={iconSize}
+                                        strokeWidth={iconConfig.strokeWidth ?? 1.75}
+                                        className={iconConfig.className}
+                                    />
+                                </div>
+                                <div className="flex flex-col items-center gap-1">
+                                    <span className="theme-heading flex items-center justify-center gap-2 text-6xl font-bold tracking-tight sm:text-7xl">
+                                        {displayTemp}&deg;
+                                    </span>
+                                    <span
+                                        className="theme-heading max-w-[16rem] text-[1.7rem] font-bold capitalize leading-none sm:max-w-none sm:text-4xl"
+                                        title={locationName || "Current Location"}
+                                    >
+                                        {primaryLocationName}
+                                    </span>
+                                    {secondaryLocationName ? (
+                                        <span className="theme-muted max-w-[18rem] text-center text-sm font-semibold leading-snug sm:max-w-none">
+                                            {secondaryLocationName}
                                         </span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </CollapsiblePanel>
-                </div>
-            </div>
-
-            {/* Personality + AI advice */}
-            <div className="surface-card-strong overflow-hidden rounded-[28px] bg-[radial-gradient(circle_at_top_left,rgba(125,211,252,0.12),transparent_38%),linear-gradient(160deg,rgba(255,255,255,0.06),transparent_62%)]">
-                <div className="px-4 py-4 sm:px-5 sm:py-5">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0 flex-1">
-                            <div className="flex min-w-0 flex-col items-center gap-2.5 text-center sm:flex-row sm:items-start sm:text-left">
-                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm sm:h-11 sm:w-11">
-                                    <PersonalityIcon size={18} />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                                        <p className="theme-section-label text-[11px] font-bold tracking-[0.22em]">Forecast Voice</p>
-                                        <span className="rounded-full border border-[color:var(--accent-border)] bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--accent-text)]">
-                                            Active
-                                        </span>
-                                        {selectedPersonality.isCustom ? (
-                                            <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
-                                                Custom
-                                            </span>
-                                        ) : null}
-                                    </div>
-                                    <h2 className="theme-heading mt-2 text-[clamp(1.7rem,9vw,2.45rem)] font-bold leading-none">
-                                        {selectedPersonality.label}
-                                    </h2>
-                                    <p className="theme-subtle mx-auto mt-2 max-w-[30ch] text-[13px] leading-relaxed opacity-90 sm:mx-0 sm:text-sm">
-                                        {selectedPersonality.description}
-                                    </p>
+                                    ) : null}
+                                    <span className="theme-muted text-sm font-semibold">
+                                        H: {dailyHigh}&deg; L: {dailyLow}&deg;
+                                    </span>
                                 </div>
                             </div>
-                        </div>
 
-                        <div className="flex justify-center sm:block">
-                            <button
-                                type="button"
-                                onClick={() => setIsVoiceMenuOpen((currentValue) => !currentValue)}
-                                className="surface-chip inline-flex min-h-[42px] shrink-0 items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition-all hover:border-[color:var(--accent-border)] hover:text-[var(--accent-text)]"
-                                aria-expanded={isVoiceMenuOpen}
-                            >
-                                Change voice
-                                <ChevronDown className={`transition-transform ${isVoiceMenuOpen ? "rotate-180" : "-rotate-90"}`} size={14} />
-                            </button>
-                        </div>
-                    </div>
-
-                    <CollapsiblePanel open={isVoiceMenuOpen} className="mt-4">
-                        <div className="surface-tile rounded-[26px] p-4 sm:p-5">
-                            <VoiceSettingsMenu
-                                allPersonalities={allPersonalities}
-                                personalityId={personalityId}
-                                selectedPersonality={selectedPersonality}
-                                customPersonalitiesCount={customPersonalitiesCount}
-                                customIdea={customIdea}
-                                customPersonalityError={customPersonalityError}
-                                isGeneratingCustomPersonality={isGeneratingCustomPersonality}
-                                onCustomIdeaChange={onCustomIdeaChange}
-                                onPersonalityChange={handleVoiceSelection}
-                                onDeleteCustomPersonality={onDeleteCustomPersonality}
-                                onGenerateCustomPersonality={onGenerateCustomPersonality}
-                                showSelectedSummary={false}
-                            />
-                        </div>
-                    </CollapsiblePanel>
-
-                    <div className="mt-4 flex justify-center sm:justify-start">
-                        <div className="surface-chip max-w-fit rounded-full px-4 py-2 text-center sm:text-left">
-                            <p className="theme-subtle text-[10px] font-bold uppercase tracking-[0.18em]">Preview</p>
-                            <p className="theme-heading mt-1 text-sm font-medium italic leading-relaxed">
-                                &ldquo;{selectedPersonality.preview}&rdquo;
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="theme-divider mt-5 border-t pt-5">
-                        <div className="surface-tile-strong mx-auto flex max-w-[38rem] flex-col items-center rounded-[26px] px-5 py-5 text-center sm:px-6 sm:py-6">
-                            <p className="theme-subtle text-[11px] font-bold uppercase tracking-[0.22em]">Current Read</p>
-                            <p className="theme-heading mt-3 max-w-[32ch] text-center text-[1.08rem] font-medium leading-[1.72] tracking-[-0.01em] sm:max-w-[34ch] sm:text-[1.12rem]">
-                                {resolvedAdvice}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="surface-card rounded-[28px] p-3">
-                <button
-                    onClick={onToggleDetail}
-                    className="organic-button w-full justify-between px-5 text-sm"
-                >
-                    <span>{isDetailed ? "Show Less" : "Show Detail"}</span>
-                    <span className="theme-subtle text-xs font-bold uppercase tracking-[0.18em]">
-                        Forecast, conditions, extras
-                    </span>
-                </button>
-            </div>
-
-            {/* Detailed View Section */}
-            <CollapsiblePanel open={isDetailed} className="w-full">
-                <div className="flex flex-col gap-6">
-                    <div className="flex flex-col gap-3">
-                        <button
-                            type="button"
-                            onClick={() => toggleDetailSection("conditions")}
-                            className={sectionAccordionButtonClass}
-                        >
-                            <div className="min-w-0">
-                                <p className="theme-heading text-sm font-bold">Right Now</p>
-                                <p className="theme-muted text-xs">Core stats, air quality, pollen, and station readings.</p>
-                            </div>
-                            <ChevronDown className={`theme-subtle h-5 w-5 shrink-0 transition-transform ${openDetailSections.conditions ? "rotate-180" : ""}`} />
-                        </button>
-                        <CollapsiblePanel open={openDetailSections.conditions} className="w-full">
-                            <div className="flex flex-col gap-6 pt-2">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className={statTileClass}>
-                                        <Thermometer className="text-orange-500" size={20} />
-                                        <div className="flex flex-col">
-                                            <span className="theme-section-label text-xs font-bold">Feels Like</span>
-                                            <span className={statValueClass}>{feelsLike}&deg;</span>
-                                        </div>
-                                    </div>
-                                    <div className={statTileClass}>
-                                        <Wind className="text-blue-400" size={20} />
-                                        <div className="flex flex-col">
-                                            <span className="theme-section-label text-xs font-bold">Wind</span>
-                                            <span className={statValueClass}>
-                                                {formatWindSpeed(current.wind_speed_10m, weatherData.current_units.wind_speed_10m)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className={statTileClass}>
-                                        <Droplets className="text-blue-500" size={20} />
-                                        <div className="flex flex-col">
-                                            <span className="theme-section-label text-xs font-bold">Precip Chance</span>
-                                            <span className={statValueClass}>{currentPrecipChanceLabel}</span>
-                                        </div>
-                                    </div>
-                                    <div className={statTileClass}>
-                                        <Droplets className="text-cyan-500" size={20} />
-                                        <div className="flex flex-col">
-                                            <span className="theme-section-label text-xs font-bold">Humidity</span>
-                                            <span className={statValueClass}>{current.relative_humidity_2m}%</span>
-                                        </div>
-                                    </div>
-                                    <div className={statTileClass}>
-                                        <SunDim className="text-yellow-500" size={20} />
-                                        <div className="flex flex-col">
-                                            <span className="theme-section-label text-xs font-bold">UV Index</span>
-                                            <span className={statValueClass}>{weatherData.daily.uv_index_max[0]}</span>
-                                        </div>
-                                    </div>
-                                    <div className={statTileClass}>
-                                        <Cloud className="text-[var(--text-muted)]" size={20} />
-                                        <div className="flex flex-col">
-                                            <span className="theme-section-label text-xs font-bold">Cloud Cover</span>
-                                            <span className={statValueClass}>{current.cloud_cover}%</span>
-                                        </div>
-                                    </div>
-                                    <div className={statTileClass}>
-                                        <Eye className="text-indigo-400" size={20} />
-                                        <div className="flex flex-col">
-                                            <span className="theme-section-label text-xs font-bold">Visibility</span>
-                                            <span className={statValueClass}>
-                                                {formatVisibility(current.visibility, distUnit, weatherData.current_units.visibility)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {aqiValue !== null && aqiLevel && (
-                                    <div className="flex flex-col gap-2">
-                                        <span className={sectionLabelClass}>Air Quality</span>
-                                        <div className="surface-tile rounded-2xl p-4 flex flex-col gap-3">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-2xl font-bold">{aqiValue}</span>
-                                                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${aqiLevel.bg} ${aqiLevel.color}`}>
-                                                        {aqiLevel.label}
-                                                    </span>
-                                                </div>
-                                                <span className="theme-muted text-xs font-medium">US AQI</span>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-3">
-                                                <div className="surface-tile-strong rounded-xl p-2">
-                                                    <p className="theme-section-label text-[10px] font-bold">PM2.5</p>
-                                                    <p className="font-semibold text-sm">{airQuality?.current?.pm2_5?.toFixed(1) ?? "—"}</p>
-                                                </div>
-                                                <div className="surface-tile-strong rounded-xl p-2">
-                                                    <p className="theme-section-label text-[10px] font-bold">PM10</p>
-                                                    <p className="font-semibold text-sm">{airQuality?.current?.pm10?.toFixed(1) ?? "—"}</p>
-                                                </div>
-                                                <div className="surface-tile-strong rounded-xl p-2">
-                                                    <p className="theme-section-label text-[10px] font-bold">Ozone</p>
-                                                    <p className="font-semibold text-sm">{airQuality?.current?.ozone?.toFixed(0) ?? "—"}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {hasPollenData && (
-                                    <div className="flex flex-col gap-2">
-                                        <span className={sectionLabelClass}>Pollen</span>
-                                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                                            {grassPollen !== null && (
-                                                <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
-                                                    <Leaf className="text-green-500" size={18} />
-                                                    <span className="theme-section-label text-[10px] font-bold">Grass</span>
-                                                    <span className="font-semibold text-sm">{grassPollen.toFixed(0)}</span>
-                                                </div>
-                                            )}
-                                            {birchPollen !== null && (
-                                                <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
-                                                    <Leaf className="text-lime-600" size={18} />
-                                                    <span className="theme-section-label text-[10px] font-bold">Birch</span>
-                                                    <span className="font-semibold text-sm">{birchPollen.toFixed(0)}</span>
-                                                </div>
-                                            )}
-                                            {alderPollen !== null && (
-                                                <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
-                                                    <Leaf className="text-emerald-600" size={18} />
-                                                    <span className="theme-section-label text-[10px] font-bold">Alder</span>
-                                                    <span className="font-semibold text-sm">{alderPollen.toFixed(0)}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {metar && metarTempDisplay != null && (
-                                    <div className="flex flex-col gap-2">
-                                        <span className={sectionLabelClass}>Actual Observed</span>
-                                        <div className="surface-tile rounded-2xl p-4 flex flex-col gap-3">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Radio className="text-indigo-500" size={18} />
-                                                    <div>
-                                                        <p className="theme-heading font-bold text-sm">{metar.name || metar.icaoId}</p>
-                                                        <p className="theme-muted text-xs">Nearest weather station</p>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-2xl font-bold">{metarTempDisplay}&deg;</p>
-                                                    {metarTempDiff != null && Math.abs(metarTempDiff) >= 1 && (
-                                                        <div className="flex items-center gap-1 justify-end">
-                                                            {metarTempDiff > 0
-                                                                ? <TrendingUp size={12} className="text-orange-500" />
-                                                                : metarTempDiff < 0
-                                                                    ? <TrendingDown size={12} className="text-blue-500" />
-                                                                    : <Minus size={12} className="text-[var(--text-muted)]" />
-                                                            }
-                                                            <span className={`text-xs font-bold ${metarTempDiff > 0 ? "text-orange-500" : "text-blue-500"}`}>
-                                                                {metarTempDiff > 0 ? "+" : ""}{metarTempDiff}° vs forecast
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-2 text-center">
-                                                <div className="surface-tile-strong rounded-xl p-2">
-                                                    <p className="theme-section-label text-[10px] font-bold">Wind</p>
-                                                    <p className="font-semibold text-sm">
-                                                        {waveDirectionToCardinal(metar.wind_dir)} {metar.wind_speed} kt
+                            {(hasConfidencePill || hasStationPill || hasMinutelyPill) && (
+                                <div className={insightGridClass}>
+                                    {conf && forecastConfidence && (
+                                        <button
+                                            onClick={() => setShowConfidenceDetail(v => !v)}
+                                            className={`${insightPillClass} ${showConfidenceDetail ? insightPillOpenClass : ""} ${(!hasStationPill && !hasMinutelyPill) ? "col-span-2 sm:col-span-3" : !hasStationPill ? "col-span-2" : ""}`}
+                                        >
+                                            <div className="flex min-w-0 items-center gap-3">
+                                                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${confidenceDotClass}`} />
+                                                <div className="min-w-0">
+                                                    <p className="theme-section-label text-[10px] font-bold tracking-[0.2em]">Models</p>
+                                                    <p className="theme-heading mt-1 truncate text-sm font-semibold leading-tight">
+                                                        {confidenceSummaryLabel ?? "Forecast spread"}
+                                                    </p>
+                                                    <p className="theme-subtle mt-0.5 text-xs font-medium">
+                                                        {confidenceAggregatedTemp}&deg; &plusmn;{forecastConfidence.spread}&deg;
                                                     </p>
                                                 </div>
-                                                <div className="surface-tile-strong rounded-xl p-2">
-                                                    <p className="theme-section-label text-[10px] font-bold">Visibility</p>
-                                                    <p className="font-semibold text-sm">{metar.visibility} mi</p>
+                                            </div>
+                                            <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showConfidenceDetail ? "rotate-180" : ""}`} />
+                                        </button>
+                                    )}
+                                    {metarTempDisplay != null && (
+                                        <button
+                                            onClick={() => setShowStationDetail(v => !v)}
+                                            className={`${insightPillClass} ${showStationDetail ? insightPillOpenClass : ""} ${stationNeedsAttention ? "border-orange-300/70 bg-[linear-gradient(135deg,rgba(251,146,60,0.16),rgba(255,255,255,0.08))]" : ""} ${!hasConfidencePill ? "col-span-2" : ""}`}
+                                        >
+                                            <div className="min-w-0">
+                                                <p className="theme-section-label text-[10px] font-bold tracking-[0.2em]">Station</p>
+                                                <p className="theme-heading mt-1 truncate text-sm font-semibold leading-tight">
+                                                    {metarTempDisplay}&deg; observed
+                                                </p>
+                                                <p className="theme-subtle mt-0.5 truncate text-xs font-medium">
+                                                    {showStationTempDelta && metarTempDiff != null
+                                                        ? `${metarTempDiff > 0 ? "+" : ""}${metarTempDiff}° vs main temp`
+                                                        : stationDistanceDisplay ?? stationIcaoId}
+                                                </p>
+                                            </div>
+                                            <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showStationDetail ? "rotate-180" : ""}`} />
+                                        </button>
+                                    )}
+                                    {showMinutelyBanner && rainSummary && (
+                                        <button
+                                            onClick={() => setShowMinutelyDetail(v => !v)}
+                                            className={`${insightPillClass} ${showMinutelyDetail ? insightPillOpenClass : ""} ${minutelyPillToneClass} col-span-2 sm:col-span-1`}
+                                        >
+                                            <div className="flex min-w-0 items-center gap-3">
+                                                <CloudRain className={`${minutelyIconClass} shrink-0`} size={16} />
+                                                <div className="min-w-0">
+                                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">{minutelyWindowLabel}</p>
+                                                    <p className="mt-1 truncate text-sm font-semibold leading-tight">
+                                                        {minutelyStatusLabel}
+                                                    </p>
+                                                    <p className="mt-0.5 truncate text-xs font-medium opacity-75">
+                                                        Next-hour rain trend in 5-minute steps
+                                                    </p>
                                                 </div>
                                             </div>
+                                            <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showMinutelyDetail ? "rotate-180" : ""}`} />
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            <CollapsiblePanel open={Boolean(conf && forecastConfidence && showConfidenceDetail)} className="mt-2 w-full">
+                                <div className="surface-tile rounded-2xl border px-4 py-3">
+                                    <div className="mb-3 flex items-center justify-between border-b border-[color:var(--border-soft)] pb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className={`h-2 w-2 rounded-full ${confidenceDotClass}`} />
+                                            <span className="theme-section-label text-xs font-bold tracking-wide">Model Average</span>
+                                        </div>
+                                        <span className="theme-heading text-sm font-bold">{confidenceAggregatedTemp}&deg;</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                                        {confidenceModelNames.map((name, i) => (
+                                            confidenceModelTemps[i] != null && (
+                                                <div key={name} className="flex items-center justify-between gap-2">
+                                                    <span className="theme-muted text-xs font-medium">{name}</span>
+                                                    <span className="theme-heading text-xs font-bold">{confidenceModelTemps[i]}&deg;</span>
+                                                </div>
+                                            )
+                                        ))}
+                                    </div>
+                                </div>
+                            </CollapsiblePanel>
+                            <CollapsiblePanel open={Boolean(metar && metarTempDisplay != null && showStationDetail)} className="mt-2 w-full">
+                                <div className="surface-tile rounded-2xl border px-4 py-3 text-left">
+                                    <div className="mb-3 flex items-start justify-between gap-3 border-b border-[color:var(--border-soft)] pb-2">
+                                        <div className="min-w-0">
+                                            <p className="theme-section-label text-xs font-bold tracking-wide">Nearest Station</p>
+                                            <p className="theme-heading truncate text-sm font-bold">{stationName}</p>
+                                            <p className="theme-muted text-xs">{stationIcaoId}{stationDistanceDisplay ? ` · ${stationDistanceDisplay}` : ""}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="theme-heading text-sm font-bold">{metarTempDisplay}&deg;</p>
+                                            {showStationTempDelta && metarTempDiff != null && (
+                                                <p className={`text-xs font-bold ${metarTempDiff > 0 ? "text-orange-500" : "text-blue-500"}`}>
+                                                    {metarTempDiff > 0 ? "+" : ""}{metarTempDiff}&deg; vs main temp
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
-                                )}
-                            </div>
-                        </CollapsiblePanel>
-                    </div>
-
-                    <div className="flex flex-col gap-3">
-                        <button
-                            type="button"
-                            onClick={() => toggleDetailSection("forecast")}
-                            className={sectionAccordionButtonClass}
-                        >
-                            <div className="min-w-0">
-                                <p className="theme-heading text-sm font-bold">Forecast Flow</p>
-                                <p className="theme-muted text-xs">Hourly and multi-day outlook with swipe cues.</p>
-                            </div>
-                            <ChevronDown className={`theme-subtle h-5 w-5 shrink-0 transition-transform ${openDetailSections.forecast ? "rotate-180" : ""}`} />
-                        </button>
-                        <CollapsiblePanel open={openDetailSections.forecast} className="w-full">
-                            <div className="flex flex-col gap-6 pt-2">
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex items-center justify-between">
-                                        <span className={sectionLabelClass}>Hourly Forecast</span>
-                                        <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
-                                            Swipe
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="surface-tile-strong rounded-xl p-2">
+                                            <p className="theme-section-label text-[10px] font-bold">Wind</p>
+                                            <p className="theme-heading text-sm font-semibold">
+                                                {stationWind}
+                                            </p>
+                                        </div>
+                                        <div className="surface-tile-strong rounded-xl p-2">
+                                            <p className="theme-section-label text-[10px] font-bold">Visibility</p>
+                                            <p className="theme-heading text-sm font-semibold">{stationVisibility}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </CollapsiblePanel>
+                            <CollapsiblePanel open={Boolean(showMinutelyBanner && rainSummary && showMinutelyDetail)} className="mt-2 w-full">
+                                <div className={`w-full rounded-2xl border px-4 py-3 text-left ${minutelyBannerClass}`}>
+                                    <div className="mb-3 flex items-start justify-between gap-3 border-b border-current/10 pb-2">
+                                        <div className="min-w-0">
+                                            <p className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-70">
+                                                Short-range rain trend
+                                            </p>
+                                            <p className="text-sm font-bold">
+                                                Precipitation over the next hour
+                                            </p>
+                                        </div>
+                                        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${minutelyBadgeClass}`}>
+                                            {minutelyStatusLabel}
                                         </span>
                                     </div>
-                                    <div className="scroll-fade-horizontal">
-                                        <div className="flex overflow-x-auto gap-3 px-2 pb-4 pt-2 snap-x hide-scrollbar">
-                                            {(() => {
-                                                const localNow = getLocalTimeForOffset(weatherData.utc_offset_seconds);
-                                                const oneHourAgo = new Date(localNow.getTime() - 3600000);
-                                                const twelveHoursFromNow = new Date(localNow.getTime() + 12 * 3600000);
-                                                const events: {
-                                                    type: "hour" | "sunrise" | "sunset";
-                                                    time: Date;
-                                                    temp?: number;
-                                                    iconCode?: number;
-                                                    isDay?: number;
-                                                    pop?: number;
-                                                }[] = [];
+                                    <div className="flex items-start gap-3">
+                                        <CloudRain className={`${minutelyIconClass} mt-0.5 shrink-0`} size={18} />
+                                        <p className="text-sm font-semibold leading-relaxed">
+                                            {minutelySummaryText}
+                                        </p>
+                                    </div>
+                                    {minutelyTimeline.length > 0 && (
+                                        <div className="mt-4">
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] opacity-70">
+                                                    Timeline
+                                                </p>
+                                                <p className="text-xs font-medium opacity-80">
+                                                    5-minute steps
+                                                </p>
+                                            </div>
+                                            <div className="surface-tile-strong rounded-2xl px-3 py-4">
+                                                <div className="flex h-24 items-end gap-1.5">
+                                                    {minutelyTimeline.map((point) => {
+                                                        const probabilityHeight = Math.max(8, Math.round(point.precip_probability * 100));
+                                                        const intensityRatio = maxMinutelyIntensity > 0
+                                                            ? point.precip_intensity / maxMinutelyIntensity
+                                                            : 0;
+                                                        const barHeight = point.precip_probability > 0 || point.precip_intensity > 0
+                                                            ? Math.max(probabilityHeight, Math.round(intensityRatio * 100))
+                                                            : 8;
 
-                                                weatherData.hourly.time.slice(0, 48).forEach((timeString: string, index: number) => {
-                                                    const hourDate = parseLocationDateTime(timeString);
-                                                    if (hourDate >= oneHourAgo && hourDate <= twelveHoursFromNow) {
-                                                        events.push({
-                                                            type: "hour",
-                                                            time: hourDate,
-                                                            temp: Math.round(weatherData.hourly.temperature_2m[index]),
-                                                            iconCode: weatherData.hourly.weather_code[index],
-                                                            isDay: weatherData.hourly.is_day[index],
-                                                            pop: weatherData.hourly.precipitation_probability?.[index]
-                                                        });
-                                                    }
-                                                });
-
-                                                weatherData.daily.time.slice(0, 3).forEach((_: string, index: number) => {
-                                                    const sunriseStr = weatherData.daily.sunrise?.[index];
-                                                    const sunsetStr = weatherData.daily.sunset?.[index];
-                                                    if (sunriseStr) {
-                                                        const sunriseDate = parseLocationDateTime(sunriseStr);
-                                                        if (sunriseDate >= localNow && sunriseDate <= twelveHoursFromNow) {
-                                                            events.push({ type: "sunrise", time: sunriseDate });
-                                                        }
-                                                    }
-                                                    if (sunsetStr) {
-                                                        const sunsetDate = parseLocationDateTime(sunsetStr);
-                                                        if (sunsetDate >= localNow && sunsetDate <= twelveHoursFromNow) {
-                                                            events.push({ type: "sunset", time: sunsetDate });
-                                                        }
-                                                    }
-                                                });
-
-                                                events.sort((a, b) => a.time.getTime() - b.time.getTime());
-
-                                                return events.map((event, idx) => {
-                                                    if (event.type === "hour") {
-                                                        const hIconName = getWeatherIconFromCode(event.iconCode ?? 0, event.isDay ?? 1);
-                                                        const hourlyIconConfig = IconMap[hIconName] || IconMap["cloud"];
-                                                        const HIcon = hourlyIconConfig.icon;
                                                         return (
-                                                            <div key={`hour-${idx}`} className={forecastTileClass}>
-                                                                <span className="font-semibold text-sm">{format(event.time, "h a")}</span>
-                                                                <HIcon
-                                                                    size={24}
-                                                                    strokeWidth={hourlyIconConfig.strokeWidth ?? 1.9}
-                                                                    className={hourlyIconConfig.className}
-                                                                />
-                                                                <div className="flex flex-col items-center">
-                                                                    <span className="font-bold">{event.temp}&deg;</span>
-                                                                    {shouldShowForecastChance(event.pop) && (
-                                                                        <span className="text-[10px] font-bold text-blue-500">{event.pop}%</span>
-                                                                    )}
+                                                            <div key={point.offset_minutes} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
+                                                                <div className="flex h-full w-full items-end">
+                                                                    <div
+                                                                        className={`w-full rounded-full transition-all ${point.precip_probability >= 0.5 || point.precip_intensity > 0.05
+                                                                            ? "bg-gradient-to-t from-sky-500 to-cyan-300"
+                                                                            : point.precip_probability > 0 || point.precip_intensity > 0
+                                                                                ? "bg-gradient-to-t from-sky-400/70 to-cyan-200/70"
+                                                                                : "bg-[color:var(--border-soft)]"
+                                                                            }`}
+                                                                        style={{ height: `${barHeight}%` }}
+                                                                        title={`${point.offset_minutes} min: ${Math.round(point.precip_probability * 100)}%`}
+                                                                    />
                                                                 </div>
                                                             </div>
                                                         );
-                                                    }
-
-                                                    if (event.type === "sunrise") {
-                                                        return (
-                                                            <div key={`sunrise-${idx}`} className="surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-orange-200/70 bg-gradient-to-t from-orange-200/55 to-[var(--surface-card-strong)] p-3">
-                                                                <span className="font-semibold text-sm">{format(event.time, "h:mm")}</span>
-                                                                <Sunrise size={24} className="text-orange-500" />
-                                                                <span className="font-bold text-xs">Sunrise</span>
-                                                            </div>
-                                                        );
-                                                    }
-
-                                                    return (
-                                                        <div key={`sunset-${idx}`} className="surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-indigo-200/70 bg-gradient-to-t from-indigo-200/40 to-[var(--surface-card-strong)] p-3">
-                                                            <span className="font-semibold text-sm">{format(event.time, "h:mm")}</span>
-                                                            <Sunset size={24} className="text-indigo-500" />
-                                                            <span className="font-bold text-xs">Sunset</span>
-                                                        </div>
-                                                    );
-                                                });
-                                            })()}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex items-center justify-between">
-                                        <span className={sectionLabelClass}>16-Day Forecast</span>
-                                        <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
-                                            Swipe
-                                        </span>
-                                    </div>
-                                    <div className="scroll-fade-horizontal">
-                                        <div className="flex overflow-x-auto gap-3 px-2 pb-4 pt-2 snap-x hide-scrollbar">
-                                            {weatherData.daily.time.slice(0, 16).map((timeString: string, index: number) => {
-                                                const dayDate = parseLocationDate(timeString);
-                                                const dayCode = weatherData.daily.weather_code[index];
-                                                const dayHigh = Math.round(weatherData.daily.temperature_2m_max[index]);
-                                                const dayLow = Math.round(weatherData.daily.temperature_2m_min[index]);
-                                                const dayPrecipProbability = weatherData.daily.precipitation_probability_max?.[index] ?? 0;
-                                                const dayRainTotal = (weatherData.daily.rain_sum?.[index] ?? 0) + (weatherData.daily.showers_sum?.[index] ?? 0);
-                                                const daySnowfallTotal = weatherData.daily.snowfall_sum?.[index] ?? 0;
-                                                const showRainChance = shouldShowForecastChance(dayPrecipProbability)
-                                                    && dayRainTotal > 0
-                                                    && daySnowfallTotal === 0
-                                                    && isLiquidPrecipitationCode(dayCode);
-                                                const dIconName = getWeatherIconFromCode(dayCode, 1);
-                                                const dailyIconConfig = IconMap[dIconName] || IconMap["cloud"];
-                                                const DIcon = dailyIconConfig.icon;
-
-                                                return (
-                                                    <div key={timeString} className={forecastDayTileClass}>
-                                                        <span className="font-semibold text-sm">{index === 0 ? "Today" : format(dayDate, "MMM d")}</span>
-                                                        <DIcon
-                                                            size={28}
-                                                            strokeWidth={dailyIconConfig.strokeWidth ?? 1.9}
-                                                            className={`${dailyIconConfig.className} my-1 flex-shrink-0`}
-                                                        />
-                                                        {showRainChance && (
-                                                            <span className="text-[10px] font-bold text-blue-500 -mt-1 mb-1">{dayPrecipProbability}%</span>
-                                                        )}
-                                                        <div className="flex items-center gap-2 text-xs font-bold w-full justify-between">
-                                                            <span className="theme-muted font-medium">{dayLow}&deg;</span>
-                                                            <span>{dayHigh}&deg;</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </CollapsiblePanel>
-                    </div>
-
-                    <div className="flex flex-col gap-3">
-                        <button
-                            type="button"
-                            onClick={() => toggleDetailSection("extras")}
-                            className={sectionAccordionButtonClass}
-                        >
-                            <div className="min-w-0">
-                                <p className="theme-heading text-sm font-bold">Extras</p>
-                                <p className="theme-muted text-xs">Moon, marine, and historical context.</p>
-                            </div>
-                            <ChevronDown className={`theme-subtle h-5 w-5 shrink-0 transition-transform ${openDetailSections.extras ? "rotate-180" : ""}`} />
-                        </button>
-                        <CollapsiblePanel open={openDetailSections.extras} className="w-full">
-                            <div className="flex flex-col gap-6 pt-2">
-                                {astronomy && (
-                                    <div className="flex flex-col gap-2">
-                                        <span className={sectionLabelClass}>Moon</span>
-                                        <div className="surface-tile rounded-2xl p-4 flex items-center justify-between gap-4">
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-5xl leading-none">{getMoonPhaseEmoji(astronomy.moon_phase)}</span>
-                                                <div>
-                                                    <p className="theme-heading font-bold">{astronomy.moon_phase}</p>
-                                                    <p className="theme-muted text-xs">{astronomy.moon_illumination}% illuminated</p>
+                                                    })}
+                                                </div>
+                                                <div className="mt-3 flex justify-between text-[10px] font-bold uppercase tracking-wide opacity-70">
+                                                    <span>Now</span>
+                                                    <span>15m</span>
+                                                    <span>30m</span>
+                                                    <span>45m</span>
+                                                    <span>1h</span>
                                                 </div>
                                             </div>
-                                            <div className="flex flex-col gap-1 text-right text-sm">
-                                                {astronomy.moonrise && astronomy.moonrise !== "No moonrise" && (
-                                                    <div className="flex items-center gap-1 justify-end">
-                                                        <span className="theme-muted text-xs">Rise</span>
-                                                        <span className="font-semibold">{astronomy.moonrise}</span>
-                                                    </div>
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                {shouldShowForecastChance(peakMinutelyChance) ? (
+                                                    <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
+                                                        Peak chance {peakMinutelyChance}%
+                                                    </span>
+                                                ) : (
+                                                    <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
+                                                        Weak signal
+                                                    </span>
                                                 )}
-                                                {astronomy.moonset && astronomy.moonset !== "No moonset" && (
-                                                    <div className="flex items-center gap-1 justify-end">
-                                                        <span className="theme-muted text-xs">Set</span>
-                                                        <span className="font-semibold">{astronomy.moonset}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {marine && marine.current && (
-                                    <div className="flex flex-col gap-2">
-                                        <span className={sectionLabelClass}>Marine</span>
-                                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                                            <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
-                                                <Waves className="text-blue-500" size={18} />
-                                                <span className="theme-section-label text-[10px] font-bold">Height</span>
-                                                <span className="font-semibold text-sm">
-                                                    {marine.current.wave_height != null
-                                                        ? distUnit === "mph"
-                                                            ? `${(marine.current.wave_height * 3.281).toFixed(1)} ft`
-                                                            : `${marine.current.wave_height.toFixed(1)} m`
-                                                        : "—"}
+                                                <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
+                                                    {minutelyGuidanceText}
                                                 </span>
                                             </div>
-                                            <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
-                                                <Waves className="text-cyan-500" size={18} />
-                                                <span className="theme-section-label text-[10px] font-bold">Direction</span>
-                                                <span className="font-semibold text-sm">{marine.current.wave_direction != null ? waveDirectionToCardinal(marine.current.wave_direction) : "—"}</span>
-                                            </div>
-                                            <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
-                                                <Waves className="text-teal-500" size={18} />
-                                                <span className="theme-section-label text-[10px] font-bold">Period</span>
-                                                <span className="font-semibold text-sm">{marine.current.wave_period != null ? `${marine.current.wave_period.toFixed(1)}s` : "—"}</span>
-                                            </div>
                                         </div>
-                                    </div>
-                                )}
-
-                                {(histHigh !== null || climateNormal || riverDischarge !== null) && (
-                                    <div className="flex flex-col gap-2">
-                                        <span className={sectionLabelClass}>Historical Context</span>
-                                        <div className="surface-tile rounded-2xl p-4 flex flex-col gap-3">
-                                            <div className="flex items-center justify-between">
-                                                <span className="theme-section-label text-xs font-bold">Today</span>
-                                                <span className="font-bold text-sm">H: {dailyHigh}&deg; / L: {dailyLow}&deg;</span>
-                                            </div>
-                                            {histHigh !== null && histLow !== null && (
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <History className="text-violet-500" size={14} />
-                                                        <span className="theme-section-label text-xs font-bold">Last year</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-semibold text-sm">H: {histHigh}&deg; / L: {histLow}&deg;</span>
-                                                        {(() => {
-                                                            const diff = dailyHigh - histHigh;
-                                                            if (Math.abs(diff) < 1) return null;
-                                                            return (
-                                                                <span className={`text-xs font-bold ${diff > 0 ? "text-orange-500" : "text-blue-500"}`}>
-                                                                    {diff > 0 ? "+" : ""}{diff}&deg;
-                                                                </span>
-                                                            );
-                                                        })()}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {climateNormal && (
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="surface-chip-muted rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase">3yr avg</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-semibold text-sm">H: {climateNormal.avg_high}&deg; / L: {climateNormal.avg_low}&deg;</span>
-                                                        {(() => {
-                                                            const diff = dailyHigh - climateNormal.avg_high;
-                                                            if (Math.abs(diff) < 1) return <span className="theme-subtle text-xs font-bold">Normal</span>;
-                                                            return (
-                                                                <span className={`text-xs font-bold ${diff > 0 ? "text-orange-500" : "text-blue-500"}`}>
-                                                                    {diff > 0 ? "+" : ""}{diff}&deg; vs avg
-                                                                </span>
-                                                            );
-                                                        })()}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {riverDischarge !== null && (
-                                                <>
-                                                    <div className="theme-divider border-t" />
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center gap-2">
-                                                            <Waves className="text-blue-700" size={14} />
-                                                            <span className="theme-section-label text-xs font-bold">River Discharge</span>
-                                                        </div>
-                                                        <span className="font-semibold text-sm">{riverDischarge.toFixed(1)} m³/s</span>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </CollapsiblePanel>
+                                    )}
+                                </div>
+                            </CollapsiblePanel>
+                        </div>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={() => setShowDataSources(true)}
-                        className="surface-tile flex min-h-[56px] flex-col gap-3 rounded-[24px] px-4 py-4 text-left transition-all hover:border-[color:var(--border-strong)] hover:bg-[var(--surface-elevated)]"
-                    >
-                        <div className="flex w-full items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <p className="theme-heading text-sm font-bold">About Data</p>
-                                <p className="theme-muted text-xs">
-                                    {activeSourceEntries.length} {activeSourceEntries.length === 1 ? "source is" : "sources are"} supporting the sections currently open.
-                                </p>
+                    {/* Personality + AI advice */}
+                    <div className="personality-card-shell overflow-hidden rounded-[28px] bg-[radial-gradient(circle_at_top_left,var(--accent-soft),transparent_38%),linear-gradient(160deg,rgba(255,255,255,0.06),transparent_62%)] border border-[color:var(--border-strong)] shadow-[var(--shadow-soft)]">
+                        <div className="px-5 py-5 sm:px-8 sm:py-8">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex min-w-0 flex-col items-center gap-2.5 text-center sm:flex-row sm:items-start sm:text-left">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[color:var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-text)] shadow-sm sm:h-11 sm:w-11">
+                                            <PersonalityIcon size={18} />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                                                <p className="theme-section-label text-[11px] font-bold tracking-[0.22em]">Forecast Voice</p>
+                                                <span className="rounded-full border border-[color:var(--accent-border)] bg-[var(--accent-soft)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--accent-text)]">
+                                                    Active
+                                                </span>
+                                                {selectedPersonality.isCustom ? (
+                                                    <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
+                                                        Custom
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <h2 className="theme-heading mt-2 text-[clamp(1.7rem,9vw,2.45rem)] font-bold leading-none">
+                                                {selectedPersonality.label}
+                                            </h2>
+                                            <p className="theme-subtle mx-auto mt-2 max-w-[30ch] text-[13px] leading-relaxed opacity-90 sm:mx-0 sm:text-sm">
+                                                {selectedPersonality.description}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-center sm:block">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsVoiceMenuOpen((currentValue) => !currentValue)}
+                                        className="surface-chip inline-flex min-h-[42px] shrink-0 items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition-all hover:border-[color:var(--accent-border)] hover:text-[var(--accent-text)]"
+                                        aria-expanded={isVoiceMenuOpen}
+                                    >
+                                        Change voice
+                                        <ChevronDown className={`transition-transform ${isVoiceMenuOpen ? "rotate-180" : "-rotate-90"}`} size={14} />
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                                <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold shadow-sm">
-                                    {activeSourceEntries.length}
-                                </span>
-                                <ChevronDown className="theme-subtle -rotate-90 h-5 w-5" />
+
+                            <CollapsiblePanel open={isVoiceMenuOpen} className="mt-4">
+                                <div className="surface-tile rounded-[26px] p-4 sm:p-5">
+                                    <VoiceSettingsMenu
+                                        allPersonalities={allPersonalities}
+                                        personalityId={personalityId}
+                                        selectedPersonality={selectedPersonality}
+                                        customPersonalitiesCount={customPersonalitiesCount}
+                                        customIdea={customIdea}
+                                        customPersonalityError={customPersonalityError}
+                                        isGeneratingCustomPersonality={isGeneratingCustomPersonality}
+                                        onCustomIdeaChange={onCustomIdeaChange}
+                                        onPersonalityChange={handleVoiceSelection}
+                                        onDeleteCustomPersonality={onDeleteCustomPersonality}
+                                        onGenerateCustomPersonality={onGenerateCustomPersonality}
+                                        showSelectedSummary={false}
+                                    />
+                                </div>
+                            </CollapsiblePanel>
+
+                            <div className="mt-4 flex justify-center sm:justify-start">
+                                <div className="surface-chip max-w-fit rounded-full px-4 py-2 text-center sm:text-left">
+                                    <p className="theme-subtle text-[10px] font-bold uppercase tracking-[0.18em]">Preview</p>
+                                    <p className="theme-heading mt-1 text-sm font-medium italic leading-relaxed">
+                                        &ldquo;{selectedPersonality.preview}&rdquo;
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="theme-divider mt-5 border-t pt-5">
+                                <div className="surface-tile-strong mx-auto flex max-w-[38rem] flex-col items-center rounded-[26px] px-6 py-6 text-center transition-all hover:shadow-[var(--shadow-soft)] hover:-translate-y-0.5 sm:px-8 sm:py-8">
+                                    <p className="theme-subtle text-[11px] font-bold uppercase tracking-[0.22em]">Current Read</p>
+                                    <p className="theme-heading mt-4 max-w-[32ch] text-center text-[1.12rem] font-medium leading-[1.8] tracking-[-0.01em] sm:max-w-[36ch] sm:text-[1.15rem]">
+                                        {resolvedAdvice}
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                        <div className="flex w-full flex-wrap gap-2">
-                            {visibleSourceSummary.map(({ name }) => (
-                                <span key={name} className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold shadow-sm">
-                                    {name}
-                                </span>
-                            ))}
-                            {activeSourceEntries.length > visibleSourceSummary.length ? (
-                                <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold">
-                                    +{activeSourceEntries.length - visibleSourceSummary.length} more
-                                </span>
-                            ) : null}
-                        </div>
-                    </button>
+                    </div>
+
+                    <div className="surface-card rounded-[28px] p-3 sm:hidden">
+                        <button
+                            onClick={onToggleDetail}
+                            className="organic-button w-full justify-between px-5 text-sm"
+                        >
+                            <span>{isDetailed ? "Show Less" : "Show Detail"}</span>
+                            <span className="theme-subtle text-xs font-bold uppercase tracking-[0.18em]">
+                                Forecast, conditions, extras
+                            </span>
+                        </button>
+                    </div>
+
+                    <div className="w-full sm:hidden relative z-10">
+                        <CollapsiblePanel open={isDetailed} className="w-full">
+                            {detailedContent}
+                        </CollapsiblePanel>
+                    </div>
                 </div>
-            </CollapsiblePanel>
+
+                {/* Detailed View Section (Always visible on desktop) */}
+                <div className="hidden sm:block sm:flex-1 sm:flex-grow sm:min-w-0">
+                    {detailedContent}
+                </div>
+            </div>
 
             {showDataSources && (
                 <div

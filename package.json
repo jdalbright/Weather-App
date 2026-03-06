@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:personalities": "node --env-file=.env.local --experimental-strip-types --experimental-specifier-resolution=node --test tests/personality-samples.test.mts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
