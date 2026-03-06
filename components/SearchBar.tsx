@@ -97,7 +97,10 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
                     }}
                     onFocus={() => setIsOpen(true)}
                     placeholder={placeholder}
-                    className="w-full bg-white/70 backdrop-blur-md rounded-[24px] h-[52px] pl-12 pr-12 outline-none border-2 border-transparent focus:border-white focus:bg-white/90 transition-all text-gray-800 font-semibold shadow-lg organic-input"
+                    className={`w-full backdrop-blur-md py-3 pl-12 pr-12 outline-none border-2 transition-all text-gray-800 font-semibold shadow-lg organic-input ${isOpen && (query.length >= 2 || recentSearches.length > 0)
+                            ? "bg-white/90 border-white rounded-t-[24px] rounded-b-none border-b-white/50"
+                            : "bg-white/70 border-transparent focus:border-white focus:bg-white/90 rounded-[24px]"
+                        }`}
                 />
                 {query && (
                     <button
@@ -111,7 +114,7 @@ export default function SearchBar({ onLocationSelect, placeholder = "Search city
 
             {/* Dropdown Suggestions */}
             {isOpen && (query.length >= 2 || recentSearches.length > 0) && (
-                <div className="absolute top-full mt-1 w-full bg-white/85 backdrop-blur-lg rounded-[20px] shadow-2xl overflow-hidden z-50 border border-white/40 animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="absolute top-full mt-0 w-full bg-white/90 backdrop-blur-md rounded-b-[24px] shadow-lg overflow-hidden z-50 border-2 border-white border-t-0 animate-in fade-in duration-200">
 
                     {/* Suggestions from API */}
                     {query.length >= 2 && suggestions.length > 0 && (

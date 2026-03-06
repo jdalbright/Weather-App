@@ -112,7 +112,10 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen pt-24 md:pt-32 px-4 md:px-8 pb-8 flex flex-col items-center gap-8 transition-colors duration-1000">
+    <main className="min-h-screen px-4 md:px-8 pb-8 flex flex-col items-center gap-8 transition-colors duration-1000">
+
+      {/* Spacer to guarantee distance from the top */}
+      <div className="h-16 md:h-24 w-full shrink-0"></div>
 
       {/* Top Search, Units & Personality Settings */}
       <div className="w-full max-w-lg flex flex-col gap-4">
@@ -122,7 +125,7 @@ export default function Home() {
 
           <button
             onClick={() => setUnit(unit === "celsius" ? "fahrenheit" : "celsius")}
-            className="bg-white/70 backdrop-blur-md shadow-lg rounded-[24px] px-6 font-bold text-gray-800 hover:bg-white transition-colors flex items-center justify-center min-w-[70px] h-[52px]"
+            className="bg-white/70 backdrop-blur-md shadow-lg rounded-[24px] px-6 py-3 border-2 border-transparent font-bold text-gray-800 hover:bg-white transition-colors flex items-center justify-center min-w-[70px]"
           >
             &deg;{unit === "celsius" ? "C" : "F"}
           </button>
