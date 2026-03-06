@@ -223,6 +223,7 @@ export default function Home() {
 
   // Pull-to-refresh state
   const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const pullTouchStartRef = useRef<number | null>(null);
 
   // Hydrate from localStorage after mount to avoid SSR mismatch
@@ -524,9 +525,15 @@ export default function Home() {
     const shouldRefresh = pullDistance >= PULL_THRESHOLD && coords && !loading;
     setPullDistance(0);
     if (shouldRefresh) {
+      setIsRefreshing(true);
       void fetchWeatherForLocation(coords.lat, coords.lon, coords.countryCode);
     }
   }, [pullDistance, coords, loading, fetchWeatherForLocation]);
+
+  // Clear the refreshing indicator once loading finishes
+  useEffect(() => {
+    if (!loading) setIsRefreshing(false);
+  }, [loading]);
 
   const initialFetchRef = useRef(false);
 
@@ -787,17 +794,31 @@ export default function Home() {
       {/* Pull-to-refresh indicator */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed left-1/2 z-50 flex h-10 w-10 items-center justify-center rounded-full surface-card-strong shadow-md transition-[opacity,transform] duration-150"
-        style={{
-          top: -40,
-          opacity: pullDistance > 0 ? pullRatio : 0,
-          transform: `translateX(-50%) translateY(${pullDistance > 0 ? pullDistance : 0}px)`,
-        }}
+        className="pointer-events-none fixed left-1/2 z-50 flex h-10 w-10 items-center justify-center rounded-full surface-card-strong shadow-md"
+        style={
+          isRefreshing
+            ? {
+                top: -40,
+                opacity: 1,
+                animation: "pull-refresh-pop 0.3s ease-out forwards",
+                transition: "none",
+              }
+            : {
+                top: -40,
+                opacity: pullDistance > 0 ? pullRatio : 0,
+                transform: `translateX(-50%) translateY(${pullDistance > 0 ? pullDistance : 0}px)`,
+                transition: "opacity 150ms, transform 150ms",
+              }
+        }
       >
         <RefreshCw
           size={18}
-          className={pullDistance >= PULL_THRESHOLD ? "text-[var(--accent-text)]" : "text-[var(--text-muted)]"}
-          style={{ transform: `rotate(${pullRatio * 360}deg)` }}
+          className="text-[var(--accent-text)]"
+          style={
+            isRefreshing
+              ? { animation: "pull-refresh-spin 0.7s linear infinite" }
+              : { transform: `rotate(${pullRatio * 360}deg)`, transition: "transform 150ms" }
+          }
         />
       </div>
 
