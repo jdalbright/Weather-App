@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import {
     getWeatherIconFromCode,
     getWeatherDescriptionFromCode,
@@ -130,6 +130,16 @@ type ForecastSummaryCondition =
     | "rain"
     | "snow"
     | "thunder";
+type DailyOutlookDay = {
+    key: string;
+    label: string;
+    subLabel: string;
+    dayCode: number;
+    dayHigh: number;
+    dayLow: number;
+    dayPrecipProbability: number;
+    showRainChance: boolean;
+};
 
 function shouldShowForecastChance(probability: number | null | undefined): probability is number {
     return probability != null && probability >= MIN_FORECAST_CHANCE_TO_SHOW;
@@ -484,6 +494,7 @@ export default function WeatherCard({
     const [showConfidenceDetail, setShowConfidenceDetail] = useState(false);
     const [showStationDetail, setShowStationDetail] = useState(false);
     const [showMinutelyDetail, setShowMinutelyDetail] = useState(false);
+    const [showFullTenDayOutlook, setShowFullTenDayOutlook] = useState(false);
     const [isVoiceMenuOpen, setIsVoiceMenuOpen] = useState(false);
     const [expandedAlertKey, setExpandedAlertKey] = useState<string | null>(null);
     const [openDetailSections, setOpenDetailSections] = useState<Record<DetailSectionId, boolean>>({
@@ -779,7 +790,7 @@ export default function WeatherCard({
     const next24SectionSummary = aiNext24Summary.trim()
         ? aiNext24Summary.trim()
         : next24Summary;
-    const tenDayForecast = weatherData.daily.time.slice(0, 10).map((timeString: string, index: number) => {
+    const tenDayForecast: DailyOutlookDay[] = weatherData.daily.time.slice(0, 10).map((timeString: string, index: number) => {
         const dayDate = parseLocationDate(timeString);
         const dayCode = weatherData.daily.weather_code[index];
         const dayHigh = Math.round(weatherData.daily.temperature_2m_max[index]);
@@ -806,11 +817,86 @@ export default function WeatherCard({
     const tenDayMin = Math.min(...tenDayForecast.map(({ dayLow }) => dayLow));
     const tenDayMax = Math.max(...tenDayForecast.map(({ dayHigh }) => dayHigh));
     const tenDaySpread = Math.max(tenDayMax - tenDayMin, 1);
+    const hasExtendedTenDayOutlook = tenDayForecast.length > 5;
+    const primaryTenDayForecast = hasExtendedTenDayOutlook ? tenDayForecast.slice(0, 5) : tenDayForecast;
+    const extendedTenDayForecast = hasExtendedTenDayOutlook ? tenDayForecast.slice(5) : [];
     const toggleDetailSection = (section: DetailSectionId) => {
         setOpenDetailSections((current) => ({
             ...current,
             [section]: !current[section],
         }));
+    };
+    const renderTenDayForecastRow = (
+        day: DailyOutlookDay,
+        options?: {
+            animatedIndex?: number;
+            isFirstRow?: boolean;
+            isLastRow?: boolean;
+            showDivider?: boolean;
+        }
+    ) => {
+        const { animatedIndex, isFirstRow = false, isLastRow = false, showDivider = false } = options ?? {};
+        const dIconName = getWeatherIconFromCode(day.dayCode, 1);
+        const dailyIconConfig = IconMap[dIconName] || IconMap.cloud;
+        const DIcon = dailyIconConfig.icon;
+        const conditionLabel = getWeatherDescriptionFromCode(day.dayCode, 1);
+        const offset = ((day.dayLow - tenDayMin) / tenDaySpread) * 100;
+        const width = Math.max(((day.dayHigh - day.dayLow) / tenDaySpread) * 100, 10);
+        const roundedPrecipProbability = Math.round(day.dayPrecipProbability);
+        const rowStyle = animatedIndex == null
+            ? undefined
+            : { animationDelay: `${animatedIndex * 55}ms` } satisfies CSSProperties;
+        const rowPaddingClass = `${isFirstRow ? "pt-1" : "pt-3"} ${isLastRow ? "pb-1" : "pb-3"}`;
+
+        return (
+            <div
+                key={day.key}
+                className={`grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(132px,1fr)] items-center gap-3 sm:grid-cols-[minmax(88px,0.85fr)_minmax(0,1.15fr)_minmax(170px,1fr)] sm:gap-4 ${rowPaddingClass} ${showDivider ? "border-t border-[color:var(--border-soft)]" : ""} ${animatedIndex == null ? "" : "forecast-outlook-row-enter"}`}
+                style={rowStyle}
+            >
+                <div className="min-w-0">
+                    <p className="theme-heading text-sm font-bold">{day.label}</p>
+                    <p className="theme-muted text-xs">{day.subLabel}</p>
+                </div>
+                <div className="min-w-0">
+                    <div className="flex items-center gap-3">
+                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${day.showRainChance ? "border-sky-400/20 bg-sky-500/10" : "border-soft-var bg-white/[0.03]"}`}>
+                            <DIcon
+                                size={22}
+                                strokeWidth={dailyIconConfig.strokeWidth ?? 1.9}
+                                className={dailyIconConfig.className}
+                            />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="theme-heading truncate text-sm font-semibold">
+                                {conditionLabel}
+                            </p>
+                            {day.showRainChance ? (
+                                <span className="mt-1 inline-flex rounded-full bg-sky-500/12 px-2 py-0.5 text-[10px] font-bold leading-none text-sky-400">
+                                    Rain {roundedPrecipProbability}%
+                                </span>
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 min-w-0">
+                    <span className="theme-muted w-9 text-right text-sm font-semibold">{day.dayLow}&deg;</span>
+                    <div
+                        className="relative h-3 flex-1 rounded-full"
+                        style={{ background: "color-mix(in srgb, var(--surface-elevated) 82%, transparent)" }}
+                    >
+                        <div
+                            className="absolute top-0 h-3 rounded-full bg-[linear-gradient(90deg,rgba(56,189,248,0.95),rgba(251,146,60,0.92))] shadow-[0_0_0_1px_rgba(255,255,255,0.14)_inset]"
+                            style={{
+                                left: `${offset}%`,
+                                width: `${Math.min(width, 100 - offset)}%`,
+                            }}
+                        />
+                    </div>
+                    <span className="theme-heading w-9 text-sm font-bold">{day.dayHigh}&deg;</span>
+                </div>
+            </div>
+        );
     };
 
     const detailedContent = (
@@ -1122,73 +1208,44 @@ export default function WeatherCard({
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center justify-between">
                                 <span className={sectionLabelClass}>
-                                    <MetricLabel aggregated={Boolean(forecastConfidence)}>10-Day Outlook</MetricLabel>
+                                    <MetricLabel aggregated={Boolean(forecastConfidence)}>
+                                        {showFullTenDayOutlook || !hasExtendedTenDayOutlook ? "10-Day Outlook" : "5-Day Outlook"}
+                                    </MetricLabel>
                                 </span>
-                                <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
-                                    Range View
-                                </span>
+                                {hasExtendedTenDayOutlook ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowFullTenDayOutlook((current) => !current)}
+                                        className="surface-chip-muted inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] transition-all hover-border-strong-var hover-bg-surface-elevated-var"
+                                    >
+                                        <span>{showFullTenDayOutlook ? "Show 5 Days" : "Show 10 Days"}</span>
+                                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showFullTenDayOutlook ? "rotate-180" : ""}`} />
+                                    </button>
+                                ) : (
+                                    <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
+                                        Range View
+                                    </span>
+                                )}
                             </div>
                             <div className="surface-tile rounded-[28px] p-3 sm:p-4">
-                                <div className="flex flex-col divide-y divide-[color:var(--border-soft)]">
-                                    {tenDayForecast.map((day) => {
-                                        const dIconName = getWeatherIconFromCode(day.dayCode, 1);
-                                        const dailyIconConfig = IconMap[dIconName] || IconMap.cloud;
-                                        const DIcon = dailyIconConfig.icon;
-                                        const conditionLabel = getWeatherDescriptionFromCode(day.dayCode, 1);
-                                        const offset = ((day.dayLow - tenDayMin) / tenDaySpread) * 100;
-                                        const width = Math.max(((day.dayHigh - day.dayLow) / tenDaySpread) * 100, 10);
-                                        const roundedPrecipProbability = Math.round(day.dayPrecipProbability);
-
-                                        return (
-                                            <div
-                                                key={day.key}
-                                                className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(132px,1fr)] items-center gap-3 py-3 first:pt-1 last:pb-1 sm:grid-cols-[minmax(88px,0.85fr)_minmax(0,1.15fr)_minmax(170px,1fr)] sm:gap-4"
-                                            >
-                                                <div className="min-w-0">
-                                                    <p className="theme-heading text-sm font-bold">{day.label}</p>
-                                                    <p className="theme-muted text-xs">{day.subLabel}</p>
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${day.showRainChance ? "border-sky-400/20 bg-sky-500/10" : "border-soft-var bg-white/[0.03]"}`}>
-                                                            <DIcon
-                                                                size={22}
-                                                                strokeWidth={dailyIconConfig.strokeWidth ?? 1.9}
-                                                                className={dailyIconConfig.className}
-                                                            />
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <p className="theme-heading truncate text-sm font-semibold">
-                                                                {conditionLabel}
-                                                            </p>
-                                                            {day.showRainChance ? (
-                                                                <span className="mt-1 inline-flex rounded-full bg-sky-500/12 px-2 py-0.5 text-[10px] font-bold leading-none text-sky-400">
-                                                                    Rain {roundedPrecipProbability}%
-                                                                </span>
-                                                            ) : null}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <span className="theme-muted w-9 text-right text-sm font-semibold">{day.dayLow}&deg;</span>
-                                                    <div
-                                                        className="relative h-3 flex-1 rounded-full"
-                                                        style={{ background: "color-mix(in srgb, var(--surface-elevated) 82%, transparent)" }}
-                                                    >
-                                                        <div
-                                                            className="absolute top-0 h-3 rounded-full bg-[linear-gradient(90deg,rgba(56,189,248,0.95),rgba(251,146,60,0.92))] shadow-[0_0_0_1px_rgba(255,255,255,0.14)_inset]"
-                                                            style={{
-                                                                left: `${offset}%`,
-                                                                width: `${Math.min(width, 100 - offset)}%`,
-                                                            }}
-                                                        />
-                                                    </div>
-                                                    <span className="theme-heading w-9 text-sm font-bold">{day.dayHigh}&deg;</span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                <div className="flex flex-col">
+                                    {primaryTenDayForecast.map((day, index) => renderTenDayForecastRow(day, {
+                                        isFirstRow: index === 0,
+                                        isLastRow: !showFullTenDayOutlook && index === primaryTenDayForecast.length - 1,
+                                        showDivider: index > 0,
+                                    }))}
                                 </div>
+                                {hasExtendedTenDayOutlook ? (
+                                    <CollapsiblePanel open={showFullTenDayOutlook} className="forecast-outlook-expanded-shell">
+                                        <div className="flex flex-col">
+                                            {extendedTenDayForecast.map((day, index) => renderTenDayForecastRow(day, {
+                                                animatedIndex: index,
+                                                isLastRow: index === extendedTenDayForecast.length - 1,
+                                                showDivider: true,
+                                            }))}
+                                        </div>
+                                    </CollapsiblePanel>
+                                ) : null}
                             </div>
                         </div>
                     </div>

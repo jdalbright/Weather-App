@@ -761,6 +761,30 @@ body>* {
   overflow: hidden;
 }
 
+.forecast-outlook-expanded-shell {
+  overflow: visible;
+}
+
+.forecast-outlook-row-enter {
+  opacity: 0;
+  transform: translateY(16px) scale(0.988);
+  filter: blur(8px);
+  animation: forecast-outlook-row-enter 460ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes forecast-outlook-row-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.988);
+    filter: blur(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -793,7 +817,8 @@ body>* {
   .dropdown-panel-enter-soft,
   .collapsible-panel,
   .next24-chart-fade,
-  .next24-summary-card {
+  .next24-summary-card,
+  .forecast-outlook-row-enter {
     animation: none;
     transition: none;
   }
