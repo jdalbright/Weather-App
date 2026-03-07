@@ -30,7 +30,7 @@ import {
   type MetarData,
   type RainSummary,
 } from "@/lib/weather";
-import { Info, Loader2, Monitor, MoonStar, RefreshCw, Settings, SunMedium, X } from "lucide-react";
+import { Info, Loader2, Monitor, MoonStar, RefreshCw, Settings, Sparkles, SunMedium, X } from "lucide-react";
 import {
   DEFAULT_PERSONALITY,
   getAllPersonalities,
@@ -210,7 +210,7 @@ export default function Home() {
   const [dismissedAlertKeys, setDismissedAlertKeys] = useState<string[]>([]);
   const [hasMounted, setHasMounted] = useState(false);
   const [alertRefreshTick, setAlertRefreshTick] = useState(0);
-  const [aiHeroSummary, setAiHeroSummary] = useState("");
+  const [, setAiHeroSummary] = useState("");
   const [aiNext24Summary, setAiNext24Summary] = useState("");
   const [aiAdvice, setAiAdvice] = useState("");
   const [theme, setTheme] = useState("theme-sun");
@@ -1040,7 +1040,7 @@ export default function Home() {
                         <p className="theme-subtle mb-2 text-[10px]">Falls back gracefully if API keys are not configured.</p>
                         <div className="flex flex-col gap-2">
                           {[
-                            { name: "WeatherAPI", url: "weatherapi.com", desc: "Moon phase, moonrise/set, sunrise/sunset times", ok: !!astronomy },
+                            { name: "WeatherAPI", url: "weatherapi.com", desc: "Moon phase, moonrise/set, lunar illumination, and supplemental alerts", ok: !!astronomy || visibleWeatherAlerts.length > 0 },
                             { name: "Pirate Weather", url: "pirateweather.net", desc: "Minute-by-minute rain forecast for the next hour", ok: pirateWeatherConnected },
                             { name: "Aviation Weather (METAR)", url: "aviationweather.gov", desc: "Raw observations from the nearest reporting airport", ok: metarConnected },
                           ].map((src) => (
@@ -1113,7 +1113,6 @@ export default function Home() {
           weatherData={weather}
           isDetailed={isDetailed}
           onToggleDetail={() => setIsDetailed(!isDetailed)}
-          aiHeroSummary={aiHeroSummary}
           aiNext24Summary={aiNext24Summary}
           aiAdvice={aiAdvice}
           allPersonalities={allPersonalities}
@@ -1151,7 +1150,19 @@ export default function Home() {
         />
       )}
 
-      <p className="theme-muted mt-auto pt-4 text-center text-[10px] leading-relaxed opacity-60">
+      {forecastConfidence ? (
+        <div className="surface-tile mx-auto mt-3 flex w-full max-w-2xl items-start gap-3 rounded-[20px] px-4 py-3 text-left">
+          <span className="surface-chip-muted flex h-7 w-7 shrink-0 items-center justify-center rounded-full opacity-80">
+            <Sparkles size={11} strokeWidth={2.2} />
+          </span>
+          <p className="theme-subtle text-[11px] leading-relaxed">
+            <span className="theme-heading font-semibold">Blend icon</span> means the forecast is using a multi-model consensus for a steadier read, built from {forecastConfidence.modelNames.slice(0, 3).join(", ")}
+            {forecastConfidence.modelNames.length > 3 ? `, +${forecastConfidence.modelNames.length - 3} more` : ""}.
+          </p>
+        </div>
+      ) : null}
+
+      <p className="theme-muted mt-4 text-center text-[10px] leading-relaxed opacity-60">
         AI-generated advice is for informational purposes only and is not a substitute for professional medical, safety, or emergency guidance. Always follow official warnings and consult qualified professionals for health decisions.
       </p>
 
