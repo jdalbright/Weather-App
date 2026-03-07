@@ -210,7 +210,7 @@ export default function Home() {
   const [dismissedAlertKeys, setDismissedAlertKeys] = useState<string[]>([]);
   const [hasMounted, setHasMounted] = useState(false);
   const [alertRefreshTick, setAlertRefreshTick] = useState(0);
-  const [, setAiHeroSummary] = useState("");
+  const [aiHeroSummary, setAiHeroSummary] = useState("");
   const [aiNext24Summary, setAiNext24Summary] = useState("");
   const [aiAdvice, setAiAdvice] = useState("");
   const [theme, setTheme] = useState("theme-sun");
@@ -376,7 +376,7 @@ export default function Home() {
           weather: {
             temp: Math.round(weatherData.current.temperature_2m),
             unit: settings.tempUnit === "fahrenheit" ? "F" : "C",
-            condition: getWeatherDescriptionFromCode(weatherData.current.weather_code),
+            condition: getWeatherDescriptionFromCode(weatherData.current.weather_code, weatherData.current.is_day),
             isDay: weatherData.current.is_day === 1,
             localTime: `${localDayString}, ${localTimeString}`,
             sunrise: weatherData.daily.sunrise?.[0]
@@ -1113,6 +1113,7 @@ export default function Home() {
           weatherData={weather}
           isDetailed={isDetailed}
           onToggleDetail={() => setIsDetailed(!isDetailed)}
+          aiHeroSummary={aiHeroSummary}
           aiNext24Summary={aiNext24Summary}
           aiAdvice={aiAdvice}
           allPersonalities={allPersonalities}

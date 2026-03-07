@@ -83,7 +83,7 @@ export default function VoiceSettingsMenu({
       <div className="mb-3 flex items-center justify-between px-2">
         <div>
           <h3 className="theme-section-label text-sm font-bold">Forecast Voice</h3>
-          <p className="theme-muted text-xs">Swipe through voices on mobile, then check the active preview below.</p>
+          <p className="theme-muted text-xs">Swipe through voices on mobile and compare the sample line on each card.</p>
         </div>
         <span className="surface-chip rounded-full px-3 py-1 text-xs font-bold shadow-sm">
           {selectedPersonality.label}

@@ -109,9 +109,11 @@ type SourceSectionId = "hero" | "alerts" | "conditions" | "forecast" | "extras";
 type HourlyForecastPoint = {
     time: Date;
     temp: number;
+    apparentTemp: number;
     iconCode: number;
     isDay: number;
     pop: number;
+    windSpeed: number;
 };
 type ForecastDaypartKey = "overnight" | "morning" | "afternoon" | "evening";
 type ForecastDaypartCard = {
@@ -119,9 +121,9 @@ type ForecastDaypartCard = {
     label: string;
     detail: string;
     temp: number;
-    low: number;
-    high: number;
+    apparentTemp: number;
     pop: number;
+    windSpeed: number;
     iconCode: number;
     isDay: number;
 };
@@ -258,9 +260,9 @@ function buildForecastDaypartCards(points: HourlyForecastPoint[], now: Date): Fo
             label: labelData.label,
             detail: labelData.detail,
             temp: Math.round(temps.reduce((sum, value) => sum + value, 0) / temps.length),
-            low: Math.round(Math.min(...temps)),
-            high: Math.round(Math.max(...temps)),
+            apparentTemp: Math.round(bucket.reduce((sum, point) => sum + point.apparentTemp, 0) / bucket.length),
             pop: Math.round(Math.max(...bucket.map(({ pop }) => pop))),
+            windSpeed: Math.max(...bucket.map(({ windSpeed }) => windSpeed)),
             iconCode: highestPopPoint.iconCode,
             isDay: highestPopPoint.isDay,
         };
@@ -423,8 +425,8 @@ function MetricLabel({
     }
 
     return (
-        <span className="flex w-full min-w-0 items-start justify-between gap-1 align-top">
-            <span className="min-w-0 truncate pr-0.5">{children}</span>
+        <span className="inline-flex min-w-0 items-center gap-1.5 align-top">
+            <span className="min-w-0 truncate">{children}</span>
             <AggregatedMetricBadge title={aggregatedTitle} />
         </span>
     );
@@ -435,6 +437,7 @@ type WeatherCardProps = {
     weatherData: WeatherData | null,
     isDetailed: boolean,
     onToggleDetail: () => void,
+    aiHeroSummary: string,
     aiNext24Summary: string,
     aiAdvice: string,
     allPersonalities: Personality[],
@@ -471,6 +474,7 @@ export default function WeatherCard({
     weatherData,
     isDetailed,
     onToggleDetail,
+    aiHeroSummary,
     aiNext24Summary,
     aiAdvice,
     allPersonalities,
@@ -531,9 +535,10 @@ export default function WeatherCard({
 
     const dailyHigh = Math.round(weatherData.daily.temperature_2m_max[0]);
     const dailyLow = Math.round(weatherData.daily.temperature_2m_min[0]);
-    const currentCondition = getWeatherDescriptionFromCode(current.weather_code);
+    const currentCondition = getWeatherDescriptionFromCode(current.weather_code, current.is_day);
     const localTimestamp = getLocalTimeForOffset(weatherData.utc_offset_seconds);
     const localTimeLabel = format(localTimestamp, "h:mm a");
+    const heroSummary = aiHeroSummary.trim();
     const resolvedAdvice = (aiAdvice || "Looking out the window...").trim();
     const handleVoiceSelection = (nextPersonalityId: string) => {
         onPersonalityChange(nextPersonalityId);
@@ -755,9 +760,11 @@ export default function WeatherCard({
         return [{
             time: hourDate,
             temp: Math.round(weatherData.hourly.temperature_2m[index]),
+            apparentTemp: Math.round(weatherData.hourly.apparent_temperature[index]),
             iconCode: weatherData.hourly.weather_code[index],
             isDay: weatherData.hourly.is_day[index],
             pop: weatherData.hourly.precipitation_probability?.[index] ?? 0,
+            windSpeed: weatherData.hourly.wind_speed_10m?.[index] ?? current.wind_speed_10m,
         }];
     });
     const nextTwelveHourEvents: ForecastTimelineEvent[] = upcomingHourlyPoints
@@ -1081,20 +1088,20 @@ export default function WeatherCard({
                     <div className="flex flex-col gap-6 pt-2">
                         <div className="surface-tile rounded-[28px] p-4 sm:p-5">
                             <div className="flex flex-col gap-4">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="min-w-0">
+                                <div className="flex items-start justify-between gap-6">
+                                    <div className="min-w-0 flex-1">
                                         <span className={sectionLabelClass}>
                                             <MetricLabel aggregated={Boolean(forecastConfidence)}>Next 24 Hours</MetricLabel>
                                         </span>
-                                        <p className="theme-heading mt-2 text-xl font-bold sm:text-2xl">
+                                        <p className="theme-heading mt-3 text-lg font-medium leading-[1.6] tracking-tight sm:text-xl">
                                             {next24SectionSummary}
                                         </p>
                                     </div>
-                                    <div className="surface-chip shrink-0 rounded-full px-3 py-1.5 text-right">
-                                        <p className="theme-section-label text-[10px] font-bold">
+                                    <div className="surface-chip shrink-0 rounded-[16px] px-3.5 py-2 text-right shadow-sm border border-[color:var(--border-soft)]">
+                                        <p className="theme-section-label text-[10px] font-bold uppercase tracking-wider">
                                             <MetricLabel aggregated={Boolean(forecastConfidence)}>Swing</MetricLabel>
                                         </p>
-                                        <p className="theme-heading text-sm font-bold">{next24Low}&deg; to {next24High}&deg;</p>
+                                        <p className="theme-heading mt-0.5 text-sm font-bold">{next24Low}&deg; to {next24High}&deg;</p>
                                     </div>
                                 </div>
 
@@ -1105,28 +1112,41 @@ export default function WeatherCard({
                                         const DaypartIcon = daypartIconConfig.icon;
 
                                         return (
-                                            <div key={daypart.key} className="surface-tile-strong rounded-[22px] p-3">
+                                            <div key={daypart.key} className="surface-tile-strong rounded-[22px] px-3 py-2.5 sm:px-3.5 sm:py-3">
                                                 <div className="flex items-start justify-between gap-3">
-                                                    <div>
+                                                    <div className="pl-0.5">
                                                         <p className="theme-heading text-sm font-bold">{daypart.label}</p>
                                                         <p className="theme-muted text-xs">{daypart.detail}</p>
                                                     </div>
-                                                    <DaypartIcon
-                                                        size={22}
-                                                        strokeWidth={daypartIconConfig.strokeWidth ?? 1.9}
-                                                        className={daypartIconConfig.className}
-                                                    />
-                                                </div>
-                                                <div className="mt-4 flex items-end justify-between gap-3">
-                                                    <div>
-                                                        <p className="theme-heading text-2xl font-bold leading-none">{daypart.temp}&deg;</p>
-                                                        <p className="theme-muted mt-1 text-xs">{daypart.low}&deg; / {daypart.high}&deg;</p>
+                                                    <div className="flex min-w-[34px] flex-col items-center justify-start gap-1">
+                                                        <DaypartIcon
+                                                            size={22}
+                                                            strokeWidth={daypartIconConfig.strokeWidth ?? 1.9}
+                                                            className={daypartIconConfig.className}
+                                                        />
+                                                        {shouldShowForecastChance(daypart.pop) ? (
+                                                            <span className="rounded-full bg-sky-500/12 px-1.5 py-0.5 text-[9px] font-bold leading-none text-sky-400">
+                                                                {daypart.pop}%
+                                                            </span>
+                                                        ) : null}
                                                     </div>
-                                                    <div className="text-right">
-                                                        <p className="theme-section-label text-[10px] font-bold">Rain</p>
-                                                        <p className={`text-sm font-bold ${shouldShowForecastChance(daypart.pop) ? "text-blue-500" : "theme-muted"}`}>
-                                                            {daypart.pop}%
+                                                </div>
+                                                <div className="mt-2.5">
+                                                    <div className="flex flex-wrap items-end gap-x-2 gap-y-1">
+                                                        <p className="theme-heading text-[1.9rem] font-bold leading-none">{daypart.temp}&deg;</p>
+                                                        <p className="theme-muted pb-0.5 text-[0.95rem] font-medium">
+                                                            {getWeatherDescriptionFromCode(daypart.iconCode, daypart.isDay)}
                                                         </p>
+                                                    </div>
+                                                    <div className="theme-muted mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] font-medium">
+                                                        <span className="inline-flex items-center gap-1.5">
+                                                            <Thermometer size={12} className="theme-subtle" />
+                                                            Feels {daypart.apparentTemp}&deg;
+                                                        </span>
+                                                        <span className="inline-flex items-center gap-1.5">
+                                                            <Wind size={12} className="theme-subtle" />
+                                                            Gusts {formatWindSpeed(Math.round(daypart.windSpeed), weatherData.current_units.wind_speed_10m)}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1215,25 +1235,41 @@ export default function WeatherCard({
                                         const dIconName = getWeatherIconFromCode(day.dayCode, 1);
                                         const dailyIconConfig = IconMap[dIconName] || IconMap.cloud;
                                         const DIcon = dailyIconConfig.icon;
+                                        const conditionLabel = getWeatherDescriptionFromCode(day.dayCode, 1);
                                         const offset = ((day.dayLow - tenDayMin) / tenDaySpread) * 100;
                                         const width = Math.max(((day.dayHigh - day.dayLow) / tenDaySpread) * 100, 10);
+                                        const roundedPrecipProbability = Math.round(day.dayPrecipProbability);
 
                                         return (
-                                            <div key={day.key} className="grid grid-cols-[minmax(0,1.25fr)_auto_minmax(110px,1fr)_auto] items-center gap-3 py-3 first:pt-1 last:pb-1">
+                                            <div
+                                                key={day.key}
+                                                className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(132px,1fr)] items-center gap-3 py-3 first:pt-1 last:pb-1 sm:grid-cols-[minmax(88px,0.85fr)_minmax(0,1.15fr)_minmax(170px,1fr)] sm:gap-4"
+                                            >
                                                 <div className="min-w-0">
                                                     <p className="theme-heading text-sm font-bold">{day.label}</p>
-                                                    <div className="flex items-center gap-2">
-                                                        <p className="theme-muted text-xs">{day.subLabel}</p>
-                                                        {day.showRainChance && (
-                                                            <span className="text-[11px] font-bold text-blue-500">{day.dayPrecipProbability}% rain</span>
-                                                        )}
+                                                    <p className="theme-muted text-xs">{day.subLabel}</p>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${day.showRainChance ? "border-sky-400/20 bg-sky-500/10" : "border-soft-var bg-white/[0.03]"}`}>
+                                                            <DIcon
+                                                                size={22}
+                                                                strokeWidth={dailyIconConfig.strokeWidth ?? 1.9}
+                                                                className={dailyIconConfig.className}
+                                                            />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="theme-heading truncate text-sm font-semibold">
+                                                                {conditionLabel}
+                                                            </p>
+                                                            {day.showRainChance ? (
+                                                                <span className="mt-1 inline-flex rounded-full bg-sky-500/12 px-2 py-0.5 text-[10px] font-bold leading-none text-sky-400">
+                                                                    Rain {roundedPrecipProbability}%
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <DIcon
-                                                    size={22}
-                                                    strokeWidth={dailyIconConfig.strokeWidth ?? 1.9}
-                                                    className={dailyIconConfig.className}
-                                                />
                                                 <div className="flex items-center gap-2 min-w-0">
                                                     <span className="theme-muted w-9 text-right text-sm font-semibold">{day.dayLow}&deg;</span>
                                                     <div
@@ -1249,9 +1285,6 @@ export default function WeatherCard({
                                                         />
                                                     </div>
                                                     <span className="theme-heading w-9 text-sm font-bold">{day.dayHigh}&deg;</span>
-                                                </div>
-                                                <div className="surface-chip hidden min-w-[70px] justify-center rounded-full px-2 py-1 text-[11px] font-bold sm:flex">
-                                                    {getWeatherDescriptionFromCode(day.dayCode)}
                                                 </div>
                                             </div>
                                         );
@@ -1564,6 +1597,11 @@ export default function WeatherCard({
                                     <span className="theme-heading mt-2 text-sm font-bold tracking-wide">
                                         H: {dailyHigh}&deg; L: {dailyLow}&deg;
                                     </span>
+                                    {heroSummary ? (
+                                        <p className="weather-hero-summary theme-muted mt-3 max-w-[34ch] text-center text-sm font-medium leading-relaxed sm:text-[15px]">
+                                            {heroSummary}
+                                        </p>
+                                    ) : null}
                                 </div>
                             </div>
 
@@ -1782,83 +1820,80 @@ export default function WeatherCard({
                     </div>
 
                     {/* Personality + AI advice */}
-                    <div className="personality-card-shell personality-card-bg border-strong-var shadow-soft-var overflow-hidden rounded-[28px] border">
-                        <div className="px-5 py-5 sm:px-8 sm:py-8">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex min-w-0 flex-col items-center gap-2.5 text-center sm:flex-row sm:items-start sm:text-left">
-                                        <div className="border-accent-var bg-accent-soft-var text-accent-var flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border shadow-sm sm:h-11 sm:w-11">
-                                            <PersonalityIcon size={18} />
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                                                <p className="theme-section-label text-[11px] font-bold tracking-[0.22em]">Forecast Voice</p>
-                                                <span className="border-accent-var bg-accent-soft-var text-accent-var rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
-                                                    Active
-                                                </span>
-                                                {selectedPersonality.isCustom ? (
-                                                    <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
-                                                        Custom
-                                                    </span>
-                                                ) : null}
+                    <div className="personality-card-shell personality-card-bg border-strong-var shadow-soft-var relative isolate overflow-hidden rounded-[28px] border">
+                        <div className="bg-accent-soft-var pointer-events-none absolute -left-10 top-4 h-32 w-32 rounded-full blur-3xl opacity-70" />
+                        <div className="pointer-events-none absolute -right-6 top-1/3 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
+                        <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+
+                        <div className="relative px-5 py-5 sm:px-8 sm:py-8">
+                            <div className="flex flex-col gap-5 sm:gap-6">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex min-w-0 flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:gap-4 sm:text-left">
+                                            <div className="border-accent-var bg-accent-soft-var text-accent-var shadow-soft-var flex h-12 w-12 shrink-0 items-center justify-center rounded-[22px] border sm:h-14 sm:w-14">
+                                                <PersonalityIcon size={20} />
                                             </div>
-                                            <h2 className="theme-heading mt-2 text-[clamp(1.7rem,9vw,2.45rem)] font-bold leading-none">
-                                                {selectedPersonality.label}
-                                            </h2>
-                                            <p className="theme-subtle mx-auto mt-2 max-w-[30ch] text-[13px] leading-relaxed opacity-90 sm:mx-0 sm:text-sm">
-                                                {selectedPersonality.description}
-                                            </p>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                                                    <p className="theme-section-label text-[11px] font-bold tracking-[0.22em]">Forecast Voice</p>
+                                                    <span className="border-accent-var bg-accent-soft-var text-accent-var rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
+                                                        Active
+                                                    </span>
+                                                    {selectedPersonality.isCustom ? (
+                                                        <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
+                                                            Custom
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                                <h2 className="theme-heading mt-3 text-[clamp(1.85rem,7vw,2.6rem)] font-bold leading-none tracking-[-0.03em]">
+                                                    {selectedPersonality.label}
+                                                </h2>
+                                                <p className="theme-subtle mx-auto mt-2 max-w-[34ch] text-[14px] leading-relaxed opacity-90 sm:mx-0 sm:text-[15px]">
+                                                    {selectedPersonality.description}
+                                                </p>
+                                            </div>
                                         </div>
+                                    </div>
+
+                                    <div className="flex justify-center sm:justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsVoiceMenuOpen((currentValue) => !currentValue)}
+                                            className="surface-chip shadow-soft-var inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-bold transition-all hover:-translate-y-0.5 hover-border-accent-var hover-text-accent-var"
+                                            aria-expanded={isVoiceMenuOpen}
+                                        >
+                                            Change voice
+                                            <ChevronDown className={`transition-transform ${isVoiceMenuOpen ? "rotate-180" : "-rotate-90"}`} size={14} />
+                                        </button>
                                     </div>
                                 </div>
 
-                                <div className="flex justify-center sm:block">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsVoiceMenuOpen((currentValue) => !currentValue)}
-                                        className="surface-chip inline-flex min-h-[42px] shrink-0 items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition-all hover-border-accent-var hover-text-accent-var"
-                                        aria-expanded={isVoiceMenuOpen}
-                                    >
-                                        Change voice
-                                        <ChevronDown className={`transition-transform ${isVoiceMenuOpen ? "rotate-180" : "-rotate-90"}`} size={14} />
-                                    </button>
-                                </div>
-                            </div>
+                                <CollapsiblePanel open={isVoiceMenuOpen} className="mt-0">
+                                    <div className="surface-tile rounded-[26px] p-4 sm:p-5">
+                                        <VoiceSettingsMenu
+                                            allPersonalities={allPersonalities}
+                                            personalityId={personalityId}
+                                            selectedPersonality={selectedPersonality}
+                                            customPersonalitiesCount={customPersonalitiesCount}
+                                            customIdea={customIdea}
+                                            customPersonalityError={customPersonalityError}
+                                            isGeneratingCustomPersonality={isGeneratingCustomPersonality}
+                                            onCustomIdeaChange={onCustomIdeaChange}
+                                            onPersonalityChange={handleVoiceSelection}
+                                            onDeleteCustomPersonality={onDeleteCustomPersonality}
+                                            onGenerateCustomPersonality={onGenerateCustomPersonality}
+                                            showSelectedSummary={false}
+                                        />
+                                    </div>
+                                </CollapsiblePanel>
 
-                            <CollapsiblePanel open={isVoiceMenuOpen} className="mt-4">
-                                <div className="surface-tile rounded-[26px] p-4 sm:p-5">
-                                    <VoiceSettingsMenu
-                                        allPersonalities={allPersonalities}
-                                        personalityId={personalityId}
-                                        selectedPersonality={selectedPersonality}
-                                        customPersonalitiesCount={customPersonalitiesCount}
-                                        customIdea={customIdea}
-                                        customPersonalityError={customPersonalityError}
-                                        isGeneratingCustomPersonality={isGeneratingCustomPersonality}
-                                        onCustomIdeaChange={onCustomIdeaChange}
-                                        onPersonalityChange={handleVoiceSelection}
-                                        onDeleteCustomPersonality={onDeleteCustomPersonality}
-                                        onGenerateCustomPersonality={onGenerateCustomPersonality}
-                                        showSelectedSummary={false}
-                                    />
-                                </div>
-                            </CollapsiblePanel>
-
-                            <div className="mt-4 flex justify-center sm:justify-start">
-                                <div className="surface-chip max-w-fit rounded-full px-4 py-2 text-center sm:text-left">
-                                    <p className="theme-subtle text-[10px] font-bold uppercase tracking-[0.18em]">Preview</p>
-                                    <p className="theme-heading mt-1 text-sm font-medium italic leading-relaxed">
-                                        &ldquo;{selectedPersonality.preview}&rdquo;
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="theme-divider mt-5 border-t pt-5">
-                                <div className="surface-tile-strong shadow-soft-var mx-auto flex max-w-[38rem] flex-col items-center rounded-[26px] px-6 py-6 text-center transition-all hover:-translate-y-0.5 sm:px-8 sm:py-8">
-                                    <p className="theme-subtle text-[11px] font-bold uppercase tracking-[0.22em]">Current Read</p>
-                                    <p className="theme-heading mt-4 max-w-[32ch] text-center text-[1.12rem] font-medium leading-[1.8] tracking-[-0.01em] sm:max-w-[36ch] sm:text-[1.15rem]">
-                                        {resolvedAdvice}
-                                    </p>
+                                <div className="theme-divider border-t pt-5 sm:pt-6">
+                                    <div className="surface-tile-strong shadow-soft-var flex flex-col items-center rounded-[26px] px-5 py-5 text-center transition-all hover:-translate-y-0.5 sm:items-start sm:px-7 sm:py-6 sm:text-left">
+                                        <p className="theme-subtle text-[11px] font-bold uppercase tracking-[0.22em]">Current Read</p>
+                                        <p className="theme-heading mt-3 max-w-[34ch] text-[1.08rem] font-medium leading-[1.75] tracking-[-0.015em] sm:text-[1.16rem] lg:max-w-[38ch]">
+                                            {resolvedAdvice}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
