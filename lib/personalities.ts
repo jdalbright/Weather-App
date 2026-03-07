@@ -3,11 +3,9 @@ export const DEFAULT_PERSONALITY = "snarky";
 export const SHARED_PROMPT_RULES =
   [
     "Use only the weather data provided and never invent missing details.",
-    "Write 1-2 short sentences.",
-    "Lead with any weather alert or notable safety risk.",
-    "Focus on the single most decision-relevant condition.",
-    "Give at least one concrete action the person can take right now.",
-    "Avoid generic filler like 'plan accordingly' unless it includes a specific recommendation.",
+    "Follow any section-specific instructions exactly, especially if they override tone, length, or focus.",
+    "Keep every response concise, specific, and easy to scan.",
+    "Avoid filler, repetition, and vague phrasing.",
     "Stay fully in character, but never let style reduce clarity or usefulness.",
   ].join(" ");
 

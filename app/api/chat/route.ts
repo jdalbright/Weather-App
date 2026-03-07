@@ -35,9 +35,9 @@ export async function POST(req: Request) {
 
     if (!process.env.AI_GATEWAY_API_KEY) {
       return Response.json({
-        heroText: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] ${body.weather?.condition ?? "Unclear weather"} near ${body.weather?.temp ?? "?"}°${body.weather?.unit ?? "F"}.`,
+        heroText: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] Right now it is ${body.weather?.condition ?? "unclear"} and ${body.weather?.temp ?? "?"}°${body.weather?.unit ?? "F"}.`,
         next24Text: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] ${body.weather?.condition ?? "Unclear weather"} holds into the next stretch with highs near ${body.weather?.highTemp ?? "?"}° and lows near ${body.weather?.lowTemp ?? "?"}°.`,
-        adviceText: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}]: It's ${body.weather?.temp ?? "?"}°${body.weather?.unit ?? "F"} and ${body.weather?.condition ?? "unclear"}, so plan accordingly.`,
+        adviceText: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] It is ${body.weather?.temp ?? "?"}°${body.weather?.unit ?? "F"} with ${body.weather?.condition ?? "unclear conditions"}. Dress for it and adjust your plans if needed.`,
       });
     }
 
@@ -52,11 +52,21 @@ export async function POST(req: Request) {
       schema: weatherAdviceSchema,
       prompt: [
         buildWeatherPrompt(body.weather),
-        "Return three fields.",
-        "heroText: one or two short sentences for the hero section. Keep it simple, compact, and forecast-like, similar to a concise weather summary. Add personality flavor, but do not make it chatty or long. No markdown, labels, or quotes.",
-        "next24Text: one to three short sentences for the detailed Next 24 Hours section. Keep it weather-summary focused and easy to scan, like a forecast blurb. Add personality flavor, but keep it simpler and more informational than adviceText. No markdown, labels, or quotes.",
-        "adviceText: two to four short sentences of practical personality-driven advice for the dedicated advice card.",
-        "Make all fields distinct. Do not repeat the same wording across them.",
+        "Return three string fields: heroText, next24Text, adviceText.",
+        "Each field has a different job. Keep their wording and purpose distinct.",
+        "heroText: one to three short sentences for the hero section.",
+        "heroText must describe only the current conditions right now.",
+        "heroText may mention the current temperature, how it feels, the sky/precipitation, wind, and whether it is day or night.",
+        "heroText must not mention the rest of today, tonight, tomorrow, highs, lows, forecast changes, rain chances, alerts, or future timing.",
+        "Keep heroText compact, personality-driven, and observational rather than advisory. No markdown, labels, or quotes.",
+        "next24Text: one to three short sentences for the detailed Next 24 Hours section.",
+        "next24Text should read like a compact forecast blurb for the coming stretch, using forecast context such as highs/lows, precipitation timing, likely shifts, or day/night transitions when relevant.",
+        "Keep next24Text easy to scan, lightly flavored by the personality, and more informational than adviceText.",
+        "adviceText: two to four short sentences of practical personality-driven guidance for the dedicated advice card.",
+        "adviceText should be the most action-oriented field. Use the most decision-relevant conditions, risks, AQI, rain chance, and alerts when they matter, and give concrete actions.",
+        "If there is a meaningful safety risk or alert, surface it clearly in next24Text and adviceText. heroText must still stay current-only.",
+        "No markdown, labels, or quotes in any field.",
+        "Do not repeat the same sentence structure or key phrasing across the three fields.",
       ].join(" "),
     });
 

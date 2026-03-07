@@ -18,20 +18,16 @@ export type ChatWeatherPayload = {
 
 export function buildWeatherPrompt(weather?: ChatWeatherPayload): string {
   return [
-    `Current Local Time: ${weather?.localTime ?? "Unknown"}.`,
-    `Weather: ${weather?.temp ?? "?"}°${weather?.unit ?? "F"} (${weather?.condition ?? "Unknown conditions"}).`,
-    `Feels Like: ${weather?.feelsLike ?? "?"}°.`,
-    `Daily High/Low: ${weather?.highTemp ?? "?"}°/${weather?.lowTemp ?? "?"}°.`,
-    `Daylight: ${weather?.isDay ? "Daytime" : "Nighttime"}.`,
+    "Weather data for one location.",
+    `Current conditions: ${weather?.temp ?? "?"}°${weather?.unit ?? "F"}, ${weather?.condition ?? "Unknown conditions"}, feels like ${weather?.feelsLike ?? "?"}°, ${weather?.isDay ? "daytime" : "nighttime"}, wind ${weather?.windSpeed ?? "Unknown"}.`,
+    `Current local time: ${weather?.localTime ?? "Unknown"}.`,
     weather?.sunrise || weather?.sunset
-      ? `Sunrise/Sunset: ${weather?.sunrise ?? "Unknown"}/${weather?.sunset ?? "Unknown"}.`
+      ? `Sunrise/sunset context: ${weather?.sunrise ?? "Unknown"}/${weather?.sunset ?? "Unknown"}.`
       : null,
-    `Wind Speed: ${weather?.windSpeed ?? "Unknown"}.`,
-    `Rain Chance: ${weather?.rainChance ?? 0}%.`,
-    `UV Index: ${weather?.uvIndex ?? 0}.`,
-    weather?.aqi != null ? `Air Quality Index (US AQI): ${weather.aqi}.` : null,
-    weather?.alerts ? `Weather Alerts: ${weather.alerts}.` : null,
-    "Give short, practical advice that reflects the conditions and time of day.",
+    `Forecast context: today's high/low ${weather?.highTemp ?? "?"}°/${weather?.lowTemp ?? "?"}°, precipitation chance ${weather?.rainChance ?? 0}%, UV index ${weather?.uvIndex ?? 0}.`,
+    weather?.aqi != null ? `Air quality context: US AQI ${weather.aqi}.` : null,
+    weather?.alerts ? `Alert context: ${weather.alerts}.` : null,
+    "Use the context selectively based on each field's job.",
   ]
     .filter(Boolean)
     .join(" ");
