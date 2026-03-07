@@ -25,6 +25,7 @@ import {
 } from "@/lib/weather";
 import { format } from "date-fns";
 import CollapsiblePanel from "@/components/CollapsiblePanel";
+import { Next24HoursChart, type HourlyForecastPoint } from "@/components/Next24HoursChart";
 import VoiceSettingsMenu from "@/components/VoiceSettingsMenu";
 import {
     Thermometer,
@@ -32,8 +33,6 @@ import {
     Droplets,
     Sun,
     Moon,
-    Sunset,
-    Sunrise,
     SunDim,
     Cloud,
     CloudSun,
@@ -97,7 +96,6 @@ const PersonalityIconMap = {
 const sectionLabelClass = "theme-section-label ml-2 text-sm font-bold";
 const statTileClass = "surface-tile flex items-center gap-3 rounded-2xl p-3";
 const statValueClass = "theme-heading font-semibold";
-const forecastTileClass = "surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center gap-2 rounded-2xl p-3";
 const heroCardClass = "weather-card-hero surface-card-strong relative overflow-hidden rounded-[32px] px-5 py-6 sm:px-8 sm:py-8";
 
 const insightPillClass = "weather-card-insight-pill flex h-full w-full min-w-0 flex-col rounded-[24px] border border-soft-var bg-surface-chip-var px-3.5 py-3 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover-border-strong-var shadow-soft-var";
@@ -106,15 +104,6 @@ const sectionAccordionButtonClass = "surface-tile flex min-h-[56px] w-full items
 const MIN_FORECAST_CHANCE_TO_SHOW = 15;
 type DetailSectionId = "forecast" | "conditions" | "extras";
 type SourceSectionId = "hero" | "alerts" | "conditions" | "forecast" | "extras";
-type HourlyForecastPoint = {
-    time: Date;
-    temp: number;
-    apparentTemp: number;
-    iconCode: number;
-    isDay: number;
-    pop: number;
-    windSpeed: number;
-};
 type ForecastDaypartKey = "overnight" | "morning" | "afternoon" | "evening";
 type ForecastDaypartCard = {
     key: string;
@@ -124,22 +113,10 @@ type ForecastDaypartCard = {
     apparentTemp: number;
     pop: number;
     windSpeed: number;
+    humidity: number;
     iconCode: number;
     isDay: number;
 };
-type ForecastTimelineEvent =
-    | {
-        type: "hour";
-        time: Date;
-        temp: number;
-        iconCode: number;
-        isDay: number;
-        pop: number;
-    }
-    | {
-        type: "sunrise" | "sunset";
-        time: Date;
-    };
 type ForecastSummarySolarEvent = {
     type: "sunrise" | "sunset";
     label: string;
@@ -263,6 +240,7 @@ function buildForecastDaypartCards(points: HourlyForecastPoint[], now: Date): Fo
             apparentTemp: Math.round(bucket.reduce((sum, point) => sum + point.apparentTemp, 0) / bucket.length),
             pop: Math.round(Math.max(...bucket.map(({ pop }) => pop))),
             windSpeed: Math.max(...bucket.map(({ windSpeed }) => windSpeed)),
+            humidity: Math.round(bucket.reduce((sum, point) => sum + point.humidity, 0) / bucket.length),
             iconCode: highestPopPoint.iconCode,
             isDay: highestPopPoint.isDay,
         };
@@ -749,7 +727,6 @@ export default function WeatherCard({
     const primaryLocationName = locationSegments[0] || locationName || "Current Location";
     const secondaryLocationName = locationSegments.length > 1 ? locationSegments.slice(1, 3).join(" · ") : null;
     const nowMinusOneHour = new Date(localTimestamp.getTime() - 3600000);
-    const twelveHoursAhead = new Date(localTimestamp.getTime() + 12 * 3600000);
     const twentyFourHoursAhead = new Date(localTimestamp.getTime() + 24 * 3600000);
     const upcomingHourlyPoints = weatherData.hourly.time.slice(0, 48).flatMap((timeString: string, index: number) => {
         const hourDate = parseLocationDateTime(timeString);
@@ -765,37 +742,9 @@ export default function WeatherCard({
             isDay: weatherData.hourly.is_day[index],
             pop: weatherData.hourly.precipitation_probability?.[index] ?? 0,
             windSpeed: weatherData.hourly.wind_speed_10m?.[index] ?? current.wind_speed_10m,
+            humidity: weatherData.hourly.relative_humidity_2m?.[index] ?? current.relative_humidity_2m,
         }];
     });
-    const nextTwelveHourEvents: ForecastTimelineEvent[] = upcomingHourlyPoints
-        .filter((point) => point.time <= twelveHoursAhead)
-        .map((point) => ({
-            type: "hour" as const,
-            time: point.time,
-            temp: point.temp,
-            iconCode: point.iconCode,
-            isDay: point.isDay,
-            pop: point.pop,
-        }));
-
-    weatherData.daily.time.slice(0, 3).forEach((_: string, index: number) => {
-        const sunriseStr = weatherData.daily.sunrise?.[index];
-        const sunsetStr = weatherData.daily.sunset?.[index];
-        if (sunriseStr) {
-            const sunriseDate = parseLocationDateTime(sunriseStr);
-            if (sunriseDate >= localTimestamp && sunriseDate <= twelveHoursAhead) {
-                nextTwelveHourEvents.push({ type: "sunrise", time: sunriseDate });
-            }
-        }
-        if (sunsetStr) {
-            const sunsetDate = parseLocationDateTime(sunsetStr);
-            if (sunsetDate >= localTimestamp && sunsetDate <= twelveHoursAhead) {
-                nextTwelveHourEvents.push({ type: "sunset", time: sunsetDate });
-            }
-        }
-    });
-
-    nextTwelveHourEvents.sort((a, b) => a.time.getTime() - b.time.getTime());
 
     const next24HourlyPoints = upcomingHourlyPoints.filter((point) => point.time >= localTimestamp);
     const nextDaypartCards = buildForecastDaypartCards(
@@ -1159,64 +1108,14 @@ export default function WeatherCard({
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center justify-between">
                                 <span className={sectionLabelClass}>
-                                    <MetricLabel aggregated={Boolean(forecastConfidence)}>Next 12 Hours</MetricLabel>
+                                    <MetricLabel aggregated={Boolean(forecastConfidence)}>Next 24 Hours</MetricLabel>
                                 </span>
                                 <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
-                                    Swipe
+                                    Interactive
                                 </span>
                             </div>
-                            <div className="scroll-fade-horizontal">
-                                <div className="flex overflow-x-auto gap-3 px-2 pb-4 pt-2 snap-x hide-scrollbar">
-                                    {nextTwelveHourEvents.map((event, idx) => {
-                                        if (event.type === "hour") {
-                                            const hIconName = getWeatherIconFromCode(event.iconCode, event.isDay);
-                                            const hourlyIconConfig = IconMap[hIconName] || IconMap["cloud"];
-                                            const HIcon = hourlyIconConfig.icon;
-                                            return (
-                                                <div key={`hour-${idx}`} className={forecastTileClass}>
-                                                    <span className="font-semibold text-sm">{idx === 0 ? "Now" : format(event.time, "h a")}</span>
-                                                    <HIcon
-                                                        size={24}
-                                                        strokeWidth={hourlyIconConfig.strokeWidth ?? 1.9}
-                                                        className={hourlyIconConfig.className}
-                                                    />
-                                                    <div className="flex flex-col items-center">
-                                                        <span className="font-bold">{event.temp}&deg;</span>
-                                                        {shouldShowForecastChance(event.pop) && (
-                                                            <span className="text-[10px] font-bold text-blue-500">{event.pop}%</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        }
-
-                                        if (event.type === "sunrise") {
-                                            return (
-                                                <div
-                                                    key={`sunrise-${idx}`}
-                                                    className="surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-orange-200/70 p-3"
-                                                    style={{ backgroundImage: "linear-gradient(to top, rgba(254, 215, 170, 0.55), var(--surface-card-strong))" }}
-                                                >
-                                                    <span className="font-semibold text-sm">{format(event.time, "h:mm")}</span>
-                                                    <Sunrise size={24} className="text-orange-500" />
-                                                    <span className="font-bold text-xs">Sunrise</span>
-                                                </div>
-                                            );
-                                        }
-
-                                        return (
-                                            <div
-                                                key={`sunset-${idx}`}
-                                                className="surface-tile flex min-w-[70px] shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-2xl border border-indigo-200/70 p-3"
-                                                style={{ backgroundImage: "linear-gradient(to top, rgba(199, 210, 254, 0.4), var(--surface-card-strong))" }}
-                                            >
-                                                <span className="font-semibold text-sm">{format(event.time, "h:mm")}</span>
-                                                <Sunset size={24} className="text-indigo-500" />
-                                                <span className="font-bold text-xs">Sunset</span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                            <div className="surface-tile rounded-[28px] p-4 sm:p-5 mt-1 overflow-hidden">
+                                <Next24HoursChart points={next24HourlyPoints} windUnit={weatherData.current_units.wind_speed_10m} />
                             </div>
                         </div>
 
