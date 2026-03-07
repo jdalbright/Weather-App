@@ -1115,7 +1115,7 @@ export default function WeatherCard({
                                 </span>
                             </div>
                             <div className="surface-tile rounded-[28px] p-4 sm:p-5 mt-1 overflow-hidden">
-                                <Next24HoursChart points={next24HourlyPoints} windUnit={weatherData.current_units.wind_speed_10m} />
+                                <Next24HoursChart points={next24HourlyPoints} />
                             </div>
                         </div>
 

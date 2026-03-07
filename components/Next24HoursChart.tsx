@@ -25,10 +25,9 @@ export type HourlyForecastPoint = {
 
 type Next24HoursChartProps = {
     points: HourlyForecastPoint[];
-    windUnit: string;
 };
 
-type MetricKey = "temp" | "apparentTemp" | "pop" | "windSpeed" | "humidity";
+type MetricKey = "temp" | "apparentTemp" | "pop" | "humidity";
 
 type MetricDefinition = {
     id: MetricKey;
@@ -41,7 +40,6 @@ type MetricDefinition = {
 type ChartPoint = HourlyForecastPoint & {
     shortTimeLabel: string;
     timeLabel: string;
-    timestamp: number;
 };
 
 type TooltipContentProps = {
@@ -64,17 +62,9 @@ function getMetricDefinition(metric: MetricKey): MetricDefinition {
     return METRICS.find((entry) => entry.id === metric) ?? METRICS[0];
 }
 
-function formatWindUnit(unit: string): string {
-    return unit === "mp/h" ? "mph" : unit;
-}
-
-function formatMetricValue(metric: MetricKey, value: number, windUnit: string): string {
+function formatMetricValue(metric: MetricKey, value: number): string {
     if (metric === "temp" || metric === "apparentTemp") {
         return `${Math.round(value)}°`;
-    }
-
-    if (metric === "windSpeed") {
-        return `${Math.round(value)} ${formatWindUnit(windUnit)}`;
     }
 
     return `${Math.round(value)}%`;
@@ -85,10 +75,6 @@ function formatAxisTick(metric: MetricKey, value: number): string {
         return `${Math.round(value)}°`;
     }
 
-    if (metric === "windSpeed") {
-        return `${Math.round(value)}`;
-    }
-
     return `${Math.round(value)}%`;
 }
 
@@ -97,7 +83,7 @@ function getMetricDomain(metric: MetricKey, values: number[]): [number, number] 
 
     const rawMin = Math.min(...values);
     const rawMax = Math.max(...values);
-    const spread = Math.max(rawMax - rawMin, metric === "windSpeed" ? 5 : metric === "temp" || metric === "apparentTemp" ? 6 : 12);
+    const spread = Math.max(rawMax - rawMin, metric === "temp" || metric === "apparentTemp" ? 6 : 12);
     const padding = spread * 0.22;
 
     if (metric === "pop" || metric === "humidity") {
@@ -105,10 +91,6 @@ function getMetricDomain(metric: MetricKey, values: number[]): [number, number] 
             Math.max(0, Math.floor(rawMin - padding)),
             Math.min(100, Math.ceil(rawMax + padding)),
         ];
-    }
-
-    if (metric === "windSpeed") {
-        return [Math.max(0, Math.floor(rawMin - padding)), Math.ceil(rawMax + padding)];
     }
 
     return [Math.floor(rawMin - padding), Math.ceil(rawMax + padding)];
@@ -148,10 +130,8 @@ function ChartTooltip({
     active,
     payload,
     metric,
-    windUnit,
 }: TooltipContentProps & {
     metric: MetricKey;
-    windUnit: string;
 }) {
     if (!active || !payload?.length) return null;
 
@@ -169,14 +149,14 @@ function ChartTooltip({
                     {metricDefinition.label}
                 </span>
                 <span className="text-sm font-bold" style={{ color: metricDefinition.color }}>
-                    {formatMetricValue(metric, data[metric], windUnit)}
+                    {formatMetricValue(metric, data[metric])}
                 </span>
             </div>
         </div>
     );
 }
 
-export function Next24HoursChart({ points, windUnit }: Next24HoursChartProps) {
+export function Next24HoursChart({ points }: Next24HoursChartProps) {
     const [activeMetric, setActiveMetric] = useState<MetricKey>(DEFAULT_METRIC);
 
     const chartData = useMemo<ChartPoint[]>(() => {
@@ -184,7 +164,6 @@ export function Next24HoursChart({ points, windUnit }: Next24HoursChartProps) {
             ...point,
             shortTimeLabel: format(point.time, "ha"),
             timeLabel: format(point.time, "h a"),
-            timestamp: point.time.getTime(),
         }));
     }, [points]);
 
@@ -206,22 +185,22 @@ export function Next24HoursChart({ points, windUnit }: Next24HoursChartProps) {
     const summaryItems = [
         {
             label: "Now",
-            value: formatMetricValue(activeMetric, summary.current[activeMetric], windUnit),
+            value: formatMetricValue(activeMetric, summary.current[activeMetric]),
             meta: summary.current.timeLabel,
         },
         {
             label: metricDefinition.peakLabel,
-            value: formatMetricValue(activeMetric, summary.peak[activeMetric], windUnit),
+            value: formatMetricValue(activeMetric, summary.peak[activeMetric]),
             meta: summary.peak.timeLabel,
         },
         {
             label: metricDefinition.lowLabel,
-            value: formatMetricValue(activeMetric, summary.low[activeMetric], windUnit),
+            value: formatMetricValue(activeMetric, summary.low[activeMetric]),
             meta: summary.low.timeLabel,
         },
         {
             label: "Late",
-            value: formatMetricValue(activeMetric, summary.last[activeMetric], windUnit),
+            value: formatMetricValue(activeMetric, summary.last[activeMetric]),
             meta: summary.last.timeLabel,
         },
     ];
@@ -251,10 +230,11 @@ export function Next24HoursChart({ points, windUnit }: Next24HoursChartProps) {
             </div>
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {summaryItems.map((item) => (
+                {summaryItems.map((item, index) => (
                     <div
-                        key={item.label}
-                        className="surface-chip rounded-[20px] px-3 py-2.5"
+                        key={`${activeMetric}-${item.label}`}
+                        className="next24-summary-card surface-chip rounded-[20px] px-3 py-2.5"
+                        style={{ animationDelay: `${index * 45}ms` }}
                     >
                         <p className="theme-muted text-[10px] font-bold uppercase tracking-[0.14em]">{item.label}</p>
                         <p className="theme-heading mt-1 text-base font-bold">{item.value}</p>
@@ -269,13 +249,10 @@ export function Next24HoursChart({ points, windUnit }: Next24HoursChartProps) {
                     background: `linear-gradient(180deg, ${chartTone.top}, ${chartTone.bottom}), var(--surface-card-strong)`,
                 }}
             >
-                <div className="mb-2 flex items-center justify-between gap-3 px-1">
+                <div key={`header-${activeMetric}`} className="next24-chart-fade mb-2 flex items-center justify-between gap-3 px-1">
                     <div>
                         <p className="theme-heading text-sm font-bold">{metricDefinition.label}</p>
-                        <p className="theme-muted text-xs">
-                            Next 24 hours
-                            {activeMetric === "windSpeed" ? ` · ${formatWindUnit(windUnit)}` : ""}
-                        </p>
+                        <p className="theme-muted text-xs">Next 24 hours</p>
                     </div>
                     <span
                         className="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]"
@@ -291,7 +268,11 @@ export function Next24HoursChart({ points, windUnit }: Next24HoursChartProps) {
 
                 <div className="h-[280px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={chartData} margin={{ top: 12, right: 8, left: -2, bottom: 4 }}>
+                        <AreaChart
+                            key={`chart-${activeMetric}`}
+                            data={chartData}
+                            margin={{ top: 12, right: 8, left: -2, bottom: 4 }}
+                        >
                             <defs>
                                 <linearGradient id={`next24-${activeMetric}`} x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="0%" stopColor={chartTone.line} stopOpacity={0.34} />
@@ -324,7 +305,7 @@ export function Next24HoursChart({ points, windUnit }: Next24HoursChartProps) {
                             />
                             <Tooltip
                                 cursor={{ stroke: "var(--border-soft)", strokeWidth: 1, strokeDasharray: "4 6" }}
-                                content={<ChartTooltip metric={activeMetric} windUnit={windUnit} />}
+                                content={<ChartTooltip metric={activeMetric} />}
                             />
                             <Area
                                 type="monotone"
@@ -340,7 +321,10 @@ export function Next24HoursChart({ points, windUnit }: Next24HoursChartProps) {
                                     stroke: "var(--surface-card-strong)",
                                     fill: chartTone.line,
                                 }}
-                                isAnimationActive={false}
+                                isAnimationActive={true}
+                                animationBegin={70}
+                                animationDuration={460}
+                                animationEasing="ease-out"
                             />
                         </AreaChart>
                     </ResponsiveContainer>
