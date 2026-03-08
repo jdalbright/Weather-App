@@ -952,6 +952,204 @@ export interface RainSummary {
   timeline?: RainTimelinePoint[];
 }
 
+export type MoonPhaseDirection = "waxing" | "waning" | "neutral";
+
+export type MoonPhaseDescriptor = {
+  key: string;
+  label: string;
+  shortLabel: string;
+  emoji: string;
+  description: string;
+  accent: string;
+  accentSoft: string;
+  direction: MoonPhaseDirection;
+};
+
+export type MoonMilestone = {
+  key: string;
+  label: string;
+  date: Date;
+  daysAway: number;
+  cycleFraction: number;
+};
+
+export type MoonPhaseTrackStop = {
+  key: string;
+  label: string;
+  shortLabel: string;
+  emoji: string;
+  cycleFraction: number;
+  active: boolean;
+};
+
+export type MoonCycleDetails = {
+  currentPhase: MoonPhaseDescriptor;
+  illuminationFraction: number;
+  cycleFraction: number;
+  cycleDay: number;
+  trendLabel: string;
+  summary: string;
+  nextMajorPhase: MoonMilestone;
+  nextFullMoon: MoonMilestone;
+  nextNewMoon: MoonMilestone;
+  phaseTrack: MoonPhaseTrackStop[];
+};
+
+const SYNODIC_MONTH_DAYS = 29.530588853;
+const REFERENCE_NEW_MOON_MS = Date.UTC(2000, 0, 6, 18, 14, 0);
+
+const MOON_PHASE_DESCRIPTORS: MoonPhaseDescriptor[] = [
+  {
+    key: "new-moon",
+    label: "New Moon",
+    shortLabel: "New",
+    emoji: "🌑",
+    description: "Dark skies tonight. The lunar cycle is resetting and moonlight stays subtle.",
+    accent: "#818cf8",
+    accentSoft: "rgba(129, 140, 248, 0.18)",
+    direction: "neutral",
+  },
+  {
+    key: "waxing-crescent",
+    label: "Waxing Crescent",
+    shortLabel: "Wax Cres",
+    emoji: "🌒",
+    description: "A slim crescent is back. Each evening should feel a little brighter than the last.",
+    accent: "#60a5fa",
+    accentSoft: "rgba(96, 165, 250, 0.18)",
+    direction: "waxing",
+  },
+  {
+    key: "first-quarter",
+    label: "First Quarter",
+    shortLabel: "1st Qtr",
+    emoji: "🌓",
+    description: "Half-lit and gaining. The moon is climbing toward its brightest stretch.",
+    accent: "#38bdf8",
+    accentSoft: "rgba(56, 189, 248, 0.18)",
+    direction: "waxing",
+  },
+  {
+    key: "waxing-gibbous",
+    label: "Waxing Gibbous",
+    shortLabel: "Wax Gib",
+    emoji: "🌔",
+    description: "Most of the face is glowing now, with the full moon drawing closer.",
+    accent: "#fbbf24",
+    accentSoft: "rgba(251, 191, 36, 0.18)",
+    direction: "waxing",
+  },
+  {
+    key: "full-moon",
+    label: "Full Moon",
+    shortLabel: "Full",
+    emoji: "🌕",
+    description: "Peak moonlight. Nights feel bright, dramatic, and a little theatrical.",
+    accent: "#f8fafc",
+    accentSoft: "rgba(248, 250, 252, 0.22)",
+    direction: "neutral",
+  },
+  {
+    key: "waning-gibbous",
+    label: "Waning Gibbous",
+    shortLabel: "Wan Gib",
+    emoji: "🌖",
+    description: "Still bright, but the glow is beginning to ease back after the peak.",
+    accent: "#f59e0b",
+    accentSoft: "rgba(245, 158, 11, 0.18)",
+    direction: "waning",
+  },
+  {
+    key: "last-quarter",
+    label: "Last Quarter",
+    shortLabel: "Last Qtr",
+    emoji: "🌗",
+    description: "Half-lit on the way down. The moon is moving toward quieter, darker nights.",
+    accent: "#a78bfa",
+    accentSoft: "rgba(167, 139, 250, 0.18)",
+    direction: "waning",
+  },
+  {
+    key: "waning-crescent",
+    label: "Waning Crescent",
+    shortLabel: "Wan Cres",
+    emoji: "🌘",
+    description: "Only a slender arc remains before the cycle resets into a new moon.",
+    accent: "#7dd3fc",
+    accentSoft: "rgba(125, 211, 252, 0.18)",
+    direction: "waning",
+  },
+];
+
+const MOON_TRACK_FRACTIONS: Record<string, number> = {
+  "new-moon": 0,
+  "waxing-crescent": 0.125,
+  "first-quarter": 0.25,
+  "waxing-gibbous": 0.375,
+  "full-moon": 0.5,
+  "waning-gibbous": 0.625,
+  "last-quarter": 0.75,
+  "waning-crescent": 0.875,
+};
+
+const MOON_MAJOR_MILESTONES = [
+  { key: "new-moon", label: "New Moon", cycleFraction: 0 },
+  { key: "first-quarter", label: "First Quarter", cycleFraction: 0.25 },
+  { key: "full-moon", label: "Full Moon", cycleFraction: 0.5 },
+  { key: "last-quarter", label: "Last Quarter", cycleFraction: 0.75 },
+] as const;
+
+function normalizeMoonPhaseLabel(phase: string): string {
+  return phase.trim().toLowerCase();
+}
+
+function normalizeCycleFraction(value: number): number {
+  const normalized = value % 1;
+  return normalized < 0 ? normalized + 1 : normalized;
+}
+
+function getMoonCycleFractionFromDate(date: Date): number {
+  const elapsedDays = (date.getTime() - REFERENCE_NEW_MOON_MS) / 86400000;
+  const normalizedAge = ((elapsedDays % SYNODIC_MONTH_DAYS) + SYNODIC_MONTH_DAYS) % SYNODIC_MONTH_DAYS;
+  return normalizedAge / SYNODIC_MONTH_DAYS;
+}
+
+function getMoonCycleFractionFromPhase(phase: string, illuminationPercent: number | undefined): number | null {
+  if (illuminationPercent == null || Number.isNaN(illuminationPercent)) return null;
+
+  const illuminationFraction = Math.min(Math.max(illuminationPercent / 100, 0), 1);
+  const normalizedPhase = normalizeMoonPhaseLabel(phase);
+  const phaseAngle = Math.acos(Math.min(Math.max(1 - 2 * illuminationFraction, -1), 1));
+  const waxingFraction = phaseAngle / (2 * Math.PI);
+
+  if (normalizedPhase === "new moon") return 0;
+  if (normalizedPhase === "first quarter") return 0.25;
+  if (normalizedPhase === "full moon") return 0.5;
+  if (normalizedPhase === "last quarter") return 0.75;
+  if (normalizedPhase.includes("waxing")) return waxingFraction;
+  if (normalizedPhase.includes("waning")) return 1 - waxingFraction;
+
+  return null;
+}
+
+function getUpcomingMoonMilestone(now: Date, cycleFraction: number, milestone: {
+  key: string;
+  label: string;
+  cycleFraction: number;
+}): MoonMilestone {
+  const rawDelta = milestone.cycleFraction - cycleFraction;
+  const normalizedDelta = rawDelta <= 0 ? rawDelta + 1 : rawDelta;
+  const daysAway = normalizedDelta * SYNODIC_MONTH_DAYS;
+
+  return {
+    key: milestone.key,
+    label: milestone.label,
+    date: new Date(now.getTime() + daysAway * 86400000),
+    daysAway,
+    cycleFraction: milestone.cycleFraction,
+  };
+}
+
 export function getMoonPhaseEmoji(phase: string): string {
   const map: Record<string, string> = {
     "New Moon": "🌑",
@@ -964,4 +1162,49 @@ export function getMoonPhaseEmoji(phase: string): string {
     "Waning Crescent": "🌘",
   };
   return map[phase] ?? "🌙";
+}
+
+export function getMoonCycleDetails(date: Date, phase: string, illuminationPercent: number | undefined): MoonCycleDetails {
+  const currentPhase = MOON_PHASE_DESCRIPTORS.find((descriptor) => normalizeMoonPhaseLabel(descriptor.label) === normalizeMoonPhaseLabel(phase))
+    ?? MOON_PHASE_DESCRIPTORS[0];
+  const illuminationFraction = Math.min(Math.max((illuminationPercent ?? 0) / 100, 0), 1);
+  const derivedCycleFraction = getMoonCycleFractionFromPhase(phase, illuminationPercent);
+  const cycleFraction = normalizeCycleFraction(derivedCycleFraction ?? getMoonCycleFractionFromDate(date));
+  const cycleDay = cycleFraction * SYNODIC_MONTH_DAYS;
+  const nextMilestones = MOON_MAJOR_MILESTONES.map((milestone) => getUpcomingMoonMilestone(date, cycleFraction, milestone));
+  const nextMajorPhase = [...nextMilestones].sort((left, right) => left.daysAway - right.daysAway)[0];
+  const nextFullMoon = nextMilestones.find((milestone) => milestone.key === "full-moon") ?? nextMajorPhase;
+  const nextNewMoon = nextMilestones.find((milestone) => milestone.key === "new-moon") ?? nextMajorPhase;
+  const trendLabel = cycleFraction === 0
+    ? "Cycle reset"
+    : cycleFraction === 0.5
+      ? "Peak moonlight"
+      : cycleFraction < 0.5
+        ? "Waxing"
+        : "Waning";
+  const summary = cycleFraction === 0.5
+    ? "Moonlight is peaking right now, so evenings should feel especially bright and dramatic."
+    : cycleFraction < 0.5
+      ? `Moonlight is building toward ${nextMajorPhase.label.toLowerCase()}, with brighter evenings ahead.`
+      : `The moon is easing toward ${nextMajorPhase.label.toLowerCase()}, and the nightly glow will keep softening.`;
+
+  return {
+    currentPhase,
+    illuminationFraction,
+    cycleFraction,
+    cycleDay,
+    trendLabel,
+    summary,
+    nextMajorPhase,
+    nextFullMoon,
+    nextNewMoon,
+    phaseTrack: MOON_PHASE_DESCRIPTORS.map((descriptor) => ({
+      key: descriptor.key,
+      label: descriptor.label,
+      shortLabel: descriptor.shortLabel,
+      emoji: descriptor.emoji,
+      cycleFraction: MOON_TRACK_FRACTIONS[descriptor.key] ?? 0,
+      active: descriptor.key === currentPhase.key,
+    })),
+  };
 }

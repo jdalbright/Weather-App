@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
     getWeatherIconFromCode,
     getWeatherDescriptionFromCode,
@@ -12,6 +12,7 @@ import {
     getAQILevel,
     getAirQualitySummary,
     waveDirectionToCardinal,
+    getMoonCycleDetails,
     type AirQualityData,
     type MarineData,
     type FloodData,
@@ -210,6 +211,39 @@ function getHistoricalDeltaCopy(delta: number, variant: "last-year" | "average")
     return {
         text: delta > 0 ? `+${delta}° warmer high` : `${absoluteDelta}° cooler high`,
         toneClass: delta > 0 ? "text-orange-500" : "text-blue-500",
+    };
+}
+
+function getMarineConditionCopy(
+    waveHeight: number | null,
+    wavePeriod: number | null,
+): { eyebrow: string; description: string } {
+    if (waveHeight == null && wavePeriod == null) {
+        return {
+            eyebrow: "Coastal feed limited",
+            description: "Wave detail is sparse for this point right now. Open-water and shoreline-aligned locations usually return richer marine guidance.",
+        };
+    }
+
+    const score = (waveHeight ?? 0) * Math.max(wavePeriod ?? 0, 1);
+
+    if (score >= 24 || (waveHeight ?? 0) >= 2.5 || (wavePeriod ?? 0) >= 12) {
+        return {
+            eyebrow: "Strong swell energy",
+            description: "Larger faces and longer-period sets point to a more active marine window with cleaner structure.",
+        };
+    }
+
+    if (score >= 12 || (waveHeight ?? 0) >= 1.2 || (wavePeriod ?? 0) >= 8) {
+        return {
+            eyebrow: "Steady rolling sets",
+            description: "Enough organized movement to feel distinctly coastal without turning chaotic.",
+        };
+    }
+
+    return {
+        eyebrow: "Light coastal texture",
+        description: "Smaller, softer wave action suggests calmer surface motion and a gentler marine profile.",
     };
 }
 
@@ -597,6 +631,26 @@ function getWindLabel(speed: number): string {
     return "Strong wind";
 }
 
+function getWindTrendHeadline(currentSpeed: number, endingSpeed: number, peakSpeed: number): string {
+    if (peakSpeed >= 25) return "A stronger push is on the way";
+    if (endingSpeed - currentSpeed >= 5) return "Wind is building through the next stretch";
+    if (currentSpeed - endingSpeed >= 5) return "The breeze should ease off";
+    return "Wind stays fairly steady";
+}
+
+function getWindTrendNarrative(currentSpeed: number, endingSpeed: number, peakSpeed: number, peakLabel: string | null): string {
+    if (peakSpeed >= 25 && peakLabel) {
+        return `Expect the strongest burst around ${peakLabel}, when the breeze reaches its local peak.`;
+    }
+    if (endingSpeed - currentSpeed >= 5) {
+        return "The next few hours trend upward, so it should feel more noticeable than it does right now.";
+    }
+    if (currentSpeed - endingSpeed >= 5) {
+        return "The forecast backs off from the current reading, so the air should feel less pushy later.";
+    }
+    return "The next few forecast hours do not show a major swing, so conditions should stay close to the current read.";
+}
+
 function getVisibilityLabel(meters: number, currentUnitsVisibility: string): string {
     const miles = currentUnitsVisibility === "m" ? meters / 1609.34 : meters / 5280;
     if (miles >= 10) return "Far-reaching view";
@@ -609,9 +663,127 @@ function clampPercentage(value: number): number {
     return Math.max(0, Math.min(100, value));
 }
 
+function formatMoonCountdown(daysAway: number): string {
+    if (daysAway < 1) return "Within 24 hours";
+    if (daysAway < 1.5) return "About 1 day";
+    return `About ${Math.round(daysAway)} days`;
+}
+
+function formatMoonCalendarLabel(date: Date, now: Date): string {
+    const sameYear = format(date, "yyyy") === format(now, "yyyy");
+    return format(date, sameYear ? "EEE, MMM d" : "EEE, MMM d, yyyy");
+}
+
+function getMoonEventLabel(value: string | undefined, emptyLabel: string): string {
+    if (!value || value.startsWith("No ")) return emptyLabel;
+    return value;
+}
+
+function MoonPhaseOrb({
+    phaseFraction,
+    accentColor,
+    size = "hero",
+}: {
+    phaseFraction: number;
+    accentColor: string;
+    size?: "hero" | "track";
+}) {
+    const svgId = useId().replace(/:/g, "");
+    const normalizedFraction = ((phaseFraction % 1) + 1) % 1;
+    const illuminationFraction = (1 - Math.cos(normalizedFraction * Math.PI * 2)) / 2;
+    const shadowShift = illuminationFraction >= 0.995
+        ? 134
+        : Math.max(illuminationFraction * 92, normalizedFraction === 0 ? 0 : 2);
+    const signedShadowShift = normalizedFraction > 0.5 ? shadowShift : -shadowShift;
+    const orbStyle = {
+        "--moon-accent": accentColor,
+    } as CSSProperties;
+    const highlightOpacity = illuminationFraction <= 0.04 ? 0.18 : size === "hero" ? 0.82 : 0.56;
+    const shadowOpacity = illuminationFraction >= 0.995
+        ? 0.015
+        : illuminationFraction <= 0.04
+            ? 0.98
+            : 0.92;
+
+    return (
+        <div
+            aria-hidden="true"
+            className={`moon-phase-orb moon-phase-orb--${size}`}
+            style={orbStyle}
+        >
+            <span className="moon-phase-orb__halo" />
+            <svg viewBox="0 0 100 100" className="moon-phase-orb__svg" role="presentation">
+                <defs>
+                    <radialGradient id={`${svgId}-surface`} cx="35%" cy="28%" r="72%">
+                        <stop offset="0%" stopColor="#f8fbff" />
+                        <stop offset="34%" stopColor="#edf2fb" />
+                        <stop offset="72%" stopColor="#cad4e6" />
+                        <stop offset="100%" stopColor="#94a3bf" />
+                    </radialGradient>
+                    <radialGradient id={`${svgId}-shadow`} cx="48%" cy="42%" r="68%">
+                        <stop offset="0%" stopColor="rgba(18, 28, 47, 0.34)" />
+                        <stop offset="58%" stopColor="rgba(7, 12, 23, 0.86)" />
+                        <stop offset="100%" stopColor="rgba(3, 6, 14, 0.98)" />
+                    </radialGradient>
+                    <radialGradient id={`${svgId}-soft-shadow`} cx="50%" cy="50%" r="68%">
+                        <stop offset="0%" stopColor="rgba(15, 23, 42, 0)" />
+                        <stop offset="100%" stopColor="rgba(15, 23, 42, 0.32)" />
+                    </radialGradient>
+                    <radialGradient id={`${svgId}-highlight`} cx="28%" cy="22%" r="56%">
+                        <stop offset="0%" stopColor="rgba(255, 255, 255, 0.92)" />
+                        <stop offset="52%" stopColor="rgba(255, 255, 255, 0.16)" />
+                        <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
+                    </radialGradient>
+                    <clipPath id={`${svgId}-clip`}>
+                        <circle cx="50" cy="50" r="46" />
+                    </clipPath>
+                </defs>
+
+                <image
+                    href="/moon_asset.png"
+                    x="-2"
+                    y="-2"
+                    height="104"
+                    width="104"
+                    clipPath={`url(#${svgId}-clip)`}
+                    preserveAspectRatio="xMidYMid slice"
+                />
+
+                <circle
+                    className="moon-phase-orb__highlight"
+                    cx="50"
+                    cy="50"
+                    r="46"
+                    fill={`url(#${svgId}-highlight)`}
+                    opacity={highlightOpacity}
+                />
+
+                <g clipPath={`url(#${svgId}-clip)`} opacity={shadowOpacity}>
+                    <circle
+                        className="moon-phase-orb__shadow-shape"
+                        cx={50 + signedShadowShift}
+                        cy="50"
+                        r="46.8"
+                        fill={`url(#${svgId}-shadow)`}
+                    />
+                    <ellipse
+                        className="moon-phase-orb__shadow-soft"
+                        cx={50 + signedShadowShift * 0.72}
+                        cy="50"
+                        rx="47"
+                        ry="43"
+                        fill={`url(#${svgId}-soft-shadow)`}
+                    />
+                </g>
+            </svg>
+        </div>
+    );
+}
+
 function ConditionRingMetric({
     icon,
     label,
+    labelText,
     value,
     detail,
     aggregated = false,
@@ -622,9 +794,14 @@ function ConditionRingMetric({
     badgeClassName,
     accentStyle,
     animationDelayMs = 0,
+    expandable = false,
+    expanded = false,
+    expandedContent,
+    onToggle,
 }: {
     icon: ReactNode;
     label: ReactNode;
+    labelText: string;
     value: string;
     detail: string;
     aggregated?: boolean;
@@ -635,47 +812,194 @@ function ConditionRingMetric({
     badgeClassName: string;
     accentStyle?: CSSProperties;
     animationDelayMs?: number;
+    expandable?: boolean;
+    expanded?: boolean;
+    expandedContent?: ReactNode;
+    onToggle?: () => void;
 }) {
+    type FlipSnapshot = {
+        rect: DOMRect;
+        boxShadow: string;
+        filter: string;
+    };
+
+    const articleRef = useRef<HTMLElement | null>(null);
+    const pendingFlipSnapshotRef = useRef<FlipSnapshot | null>(null);
+    const flipAnimationRef = useRef<Animation | null>(null);
+    const previousExpandedRef = useRef(expanded);
+    const [isPressed, setIsPressed] = useState(false);
     const normalizedProgress = clampPercentage(progress);
     const circumference = 2 * Math.PI * 44;
+    const normalizedValue = value.trim();
+    const valueLength = normalizedValue.length;
+    const valueSize = valueLength >= 8
+        ? "clamp(0.82rem, 0.95vw, 0.98rem)"
+        : valueLength >= 7
+            ? "clamp(0.9rem, 1.05vw, 1.08rem)"
+            : valueLength >= 6
+                ? "clamp(1rem, 1.2vw, 1.2rem)"
+                : "clamp(1.34rem, 2.15vw, 1.72rem)";
     const statStyle = {
         "--ring-circumference": circumference,
         "--ring-offset": circumference * (1 - normalizedProgress / 100),
         "--ring-stroke": stroke,
         "--ring-glow": glow,
         "--metric-delay": `${animationDelayMs}ms`,
+        "--ring-value-size": valueSize,
         ...accentStyle,
         animationDelay: `${animationDelayMs}ms`,
     } as CSSProperties;
+    const metricContent = (
+        <>
+            <div className="conditions-ring-core">
+                <div className="conditions-ring-metric-head">
+                    <div className="conditions-ring-metric-title-group">
+                        <span className="conditions-ring-metric-label theme-section-label text-[10px] font-bold">{label}</span>
+                        {aggregated ? <AggregatedMetricBadge title={aggregatedTitle} /> : null}
+                        {expandable ? (
+                            <span className="conditions-ring-toggle-badge" aria-hidden="true">
+                                <ChevronDown size={12} className="conditions-ring-toggle-icon" />
+                            </span>
+                        ) : null}
+                    </div>
+                    <div className={`conditions-ring-icon ${badgeClassName}`}>
+                        {icon}
+                    </div>
+                </div>
+                <div className="conditions-ring-visual">
+                    <svg
+                        aria-hidden="true"
+                        viewBox="0 0 100 100"
+                        className="conditions-ring-svg"
+                    >
+                        <circle className="conditions-ring-track" cx="50" cy="50" r="44" />
+                        <circle className="conditions-ring-progress" cx="50" cy="50" r="44" />
+                    </svg>
+                    <div className="conditions-ring-value-wrap">
+                        <p className="conditions-ring-value">{value}</p>
+                    </div>
+                </div>
+                <p className="conditions-ring-detail">{detail}</p>
+            </div>
+            {expandable && expandedContent ? (
+                <div className="conditions-ring-expanded-panel">
+                    <div className="conditions-ring-expanded-inner">
+                        {expandedContent}
+                    </div>
+                </div>
+            ) : null}
+        </>
+    );
+
+    useLayoutEffect(() => {
+        const element = articleRef.current;
+
+        if (!element) {
+            previousExpandedRef.current = expanded;
+            return;
+        }
+
+        const wasExpanded = previousExpandedRef.current;
+        previousExpandedRef.current = expanded;
+
+        if (wasExpanded === expanded) return;
+
+        const fromSnapshot = pendingFlipSnapshotRef.current;
+        pendingFlipSnapshotRef.current = null;
+
+        if (!fromSnapshot || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            return;
+        }
+
+        const fromRect = fromSnapshot.rect;
+        const toRect = element.getBoundingClientRect();
+        const deltaX = fromRect.left - toRect.left;
+        const deltaY = fromRect.top - toRect.top;
+        const scaleX = fromRect.width / toRect.width;
+        const scaleY = fromRect.height / toRect.height;
+        const toStyle = getComputedStyle(element);
+        const overshootScale = expanded ? 1.012 : 0.994;
+
+        flipAnimationRef.current?.cancel();
+        flipAnimationRef.current = element.animate(
+            [
+                {
+                    transform: `translate3d(${deltaX}px, ${deltaY}px, 0) scale(${scaleX}, ${scaleY})`,
+                    boxShadow: fromSnapshot.boxShadow,
+                    filter: fromSnapshot.filter,
+                    offset: 0,
+                },
+                {
+                    transform: `translate3d(${deltaX * 0.08}px, ${deltaY * 0.08}px, 0) scale(${overshootScale}, ${overshootScale})`,
+                    boxShadow: toStyle.boxShadow,
+                    filter: toStyle.filter === "none" ? "saturate(1)" : toStyle.filter,
+                    offset: 0.78,
+                },
+                {
+                    transform: "translate3d(0, 0, 0) scale(1, 1)",
+                    boxShadow: toStyle.boxShadow,
+                    filter: toStyle.filter === "none" ? "saturate(1)" : toStyle.filter,
+                    offset: 1,
+                },
+            ],
+            {
+                duration: 560,
+                easing: "linear",
+                fill: "both",
+            },
+        );
+
+        return () => {
+            flipAnimationRef.current?.cancel();
+        };
+    }, [expanded]);
+
+    function handlePointerDown() {
+        setIsPressed(true);
+    }
+
+    function handlePointerEnd() {
+        setIsPressed(false);
+    }
+
+    function handleMetricToggle() {
+        if (articleRef.current) {
+            const computedStyle = getComputedStyle(articleRef.current);
+            pendingFlipSnapshotRef.current = {
+                rect: articleRef.current.getBoundingClientRect(),
+                boxShadow: computedStyle.boxShadow,
+                filter: computedStyle.filter === "none" ? "saturate(1)" : computedStyle.filter,
+            };
+        }
+
+        setIsPressed(false);
+        onToggle?.();
+    }
 
     return (
         <article
+            ref={articleRef}
             className="conditions-ring-metric"
+            data-expandable={expandable ? "true" : "false"}
+            data-expanded={expanded ? "true" : "false"}
+            data-pressed={isPressed ? "true" : "false"}
             style={statStyle}
         >
-            <div className="conditions-ring-metric-head">
-                <div className="conditions-ring-metric-title-group">
-                    <span className="conditions-ring-metric-label theme-section-label text-[10px] font-bold">{label}</span>
-                    {aggregated ? <AggregatedMetricBadge title={aggregatedTitle} /> : null}
-                </div>
-                <div className={`conditions-ring-icon ${badgeClassName}`}>
-                    {icon}
-                </div>
-            </div>
-            <div className="conditions-ring-visual">
-                <svg
-                    aria-hidden="true"
-                    viewBox="0 0 100 100"
-                    className="conditions-ring-svg"
+            {expandable ? (
+                <button
+                    type="button"
+                    className="conditions-ring-metric-button"
+                    aria-expanded={expanded}
+                    aria-label={`${expanded ? "Collapse" : "Expand"} ${labelText} details`}
+                    onPointerDown={handlePointerDown}
+                    onPointerUp={handlePointerEnd}
+                    onPointerCancel={handlePointerEnd}
+                    onPointerLeave={handlePointerEnd}
+                    onClick={handleMetricToggle}
                 >
-                    <circle className="conditions-ring-track" cx="50" cy="50" r="44" />
-                    <circle className="conditions-ring-progress" cx="50" cy="50" r="44" />
-                </svg>
-                <div className="conditions-ring-value-wrap">
-                    <p className="conditions-ring-value">{value}</p>
-                </div>
-            </div>
-            <p className="conditions-ring-detail">{detail}</p>
+                    {metricContent}
+                </button>
+            ) : metricContent}
         </article>
     );
 }
@@ -688,6 +1012,7 @@ type WeatherCardProps = {
     aiHeroSummary: string,
     aiNext24Summary: string,
     aiAirQualitySummary: string,
+    aiFeelsLikeSummary: string,
     aiAdvice: string,
     allPersonalities: Personality[],
     personalityId: string,
@@ -726,6 +1051,7 @@ export default function WeatherCard({
     aiHeroSummary,
     aiNext24Summary,
     aiAirQualitySummary,
+    aiFeelsLikeSummary,
     aiAdvice,
     allPersonalities,
     personalityId,
@@ -757,6 +1083,7 @@ export default function WeatherCard({
     const [showStationDetail, setShowStationDetail] = useState(false);
     const [showMinutelyDetail, setShowMinutelyDetail] = useState(false);
     const [showAirQualityDetail, setShowAirQualityDetail] = useState(false);
+    const [expandedConditionMetric, setExpandedConditionMetric] = useState<string | null>(null);
     const [showFullTenDayOutlook, setShowFullTenDayOutlook] = useState(false);
     const [isVoiceMenuOpen, setIsVoiceMenuOpen] = useState(false);
     const [expandedAlertKey, setExpandedAlertKey] = useState<string | null>(null);
@@ -790,6 +1117,27 @@ export default function WeatherCard({
     const currentCondition = getWeatherDescriptionFromCode(current.weather_code, current.is_day);
     const localTimestamp = getLocalTimeForOffset(weatherData.utc_offset_seconds);
     const localTimeLabel = format(localTimestamp, "h:mm a");
+    const moonCycle = astronomy
+        ? getMoonCycleDetails(localTimestamp, astronomy.moon_phase, astronomy.moon_illumination)
+        : null;
+    const moonriseLabel = getMoonEventLabel(astronomy?.moonrise, "No moonrise tonight");
+    const moonsetLabel = getMoonEventLabel(astronomy?.moonset, "No moonset tonight");
+    const moonShowcaseStyle = moonCycle
+        ? {
+            "--moon-accent": moonCycle.currentPhase.accent,
+            "--moon-accent-soft": moonCycle.currentPhase.accentSoft,
+        } as CSSProperties
+        : undefined;
+    const fullMoonValue = moonCycle?.currentPhase.key === "full-moon"
+        ? "Tonight"
+        : moonCycle
+            ? formatMoonCalendarLabel(moonCycle.nextFullMoon.date, localTimestamp)
+            : "";
+    const fullMoonMeta = moonCycle?.currentPhase.key === "full-moon"
+        ? "Peak moonlight right now"
+        : moonCycle
+            ? formatMoonCountdown(moonCycle.nextFullMoon.daysAway)
+            : "";
     const heroSummary = aiHeroSummary.trim();
     const resolvedAirQualitySummary = aiAirQualitySummary.trim();
     const resolvedAdvice = (aiAdvice || "Looking out the window...").trim();
@@ -865,6 +1213,38 @@ export default function WeatherCard({
         ? Math.round(historical.daily.temperature_2m_min[0]) : null;
     const lastYearDelta = histHigh !== null ? getHistoricalDeltaCopy(dailyHigh - histHigh, "last-year") : null;
     const climateDelta = climateNormal ? getHistoricalDeltaCopy(dailyHigh - climateNormal.avg_high, "average") : null;
+    const marineCurrent = marine?.current ?? null;
+    const marineWaveHeight = marineCurrent?.wave_height ?? null;
+    const marineWaveDirection = marineCurrent?.wave_direction ?? null;
+    const marineWavePeriod = marineCurrent?.wave_period ?? null;
+    const marineWaveHeightDisplay = marineWaveHeight != null
+        ? distUnit === "mph"
+            ? `${(marineWaveHeight * 3.281).toFixed(1)} ft`
+            : `${marineWaveHeight.toFixed(1)} m`
+        : "—";
+    const marineWaveDirectionDisplay = marineWaveDirection != null
+        ? waveDirectionToCardinal(marineWaveDirection)
+        : "Variable";
+    const marineWaveDirectionDegrees = marineWaveDirection != null
+        ? `${Math.round(marineWaveDirection)}°`
+        : "No bearing";
+    const marineWavePeriodDisplay = marineWavePeriod != null
+        ? `${marineWavePeriod.toFixed(1)}s`
+        : "—";
+    const marineConditionCopy = getMarineConditionCopy(marineWaveHeight, marineWavePeriod);
+    const marineEnergyScore = marineWaveHeight != null || marineWavePeriod != null
+        ? ((marineWaveHeight ?? 0) * 6) + ((marineWavePeriod ?? 0) * 4)
+        : 0;
+    const marineEnergyProgress = marineEnergyScore > 0
+        ? clamp((marineEnergyScore / 72) * 100, 8, 100)
+        : 0;
+    const marineEnergyLabel = marineEnergyProgress >= 70
+        ? "Active"
+        : marineEnergyProgress >= 40
+            ? "Moderate"
+            : marineEnergyProgress > 0
+                ? "Gentle"
+                : "No reading";
     const historicalRangeItems: HistoricalRangeItem[] = [
         {
             key: "today",
@@ -960,6 +1340,162 @@ export default function WeatherCard({
     const stationIcaoId = metar?.icaoId ?? "----";
     const stationWind = metar ? `${waveDirectionToCardinal(metar.wind_dir)} ${metar.wind_speed} kt` : "No recent report";
     const stationVisibility = metar ? `${metar.visibility} mi` : "N/A";
+    const nextWindPoints = weatherData.hourly.time
+        .map((timeString: string, index: number) => {
+            const hourDate = parseLocationDateTime(timeString);
+            if (hourDate < localTimestamp) return null;
+
+            return {
+                time: hourDate,
+                shortLabel: format(hourDate, "ha"),
+                speed: weatherData.hourly.wind_speed_10m?.[index] ?? current.wind_speed_10m,
+            };
+        })
+        .filter((point): point is { time: Date; shortLabel: string; speed: number } => point !== null)
+        .slice(0, 6);
+    const windPeakPoint = nextWindPoints.reduce<{ time: Date; shortLabel: string; speed: number } | null>((best, point) => {
+        if (!best || point.speed >= best.speed) {
+            return point;
+        }
+        return best;
+    }, null);
+    const windAverage = nextWindPoints.length > 0
+        ? nextWindPoints.reduce((sum, point) => sum + point.speed, 0) / nextWindPoints.length
+        : current.wind_speed_10m;
+    const windEndingSpeed = nextWindPoints.at(-1)?.speed ?? current.wind_speed_10m;
+    const windPeakSpeed = windPeakPoint?.speed ?? current.wind_speed_10m;
+    const windHeadline = getWindTrendHeadline(current.wind_speed_10m, windEndingSpeed, windPeakSpeed);
+    const windNarrative = getWindTrendNarrative(current.wind_speed_10m, windEndingSpeed, windPeakSpeed, windPeakPoint?.shortLabel ?? null);
+    const windChartMax = Math.max(...nextWindPoints.map((point) => point.speed), current.wind_speed_10m, 1);
+    const windChartMin = Math.min(...nextWindPoints.map((point) => point.speed), current.wind_speed_10m);
+    const windChartRange = Math.max(windChartMax - windChartMin, 4);
+    const windPlotPoints = nextWindPoints.map((point, index, points) => ({
+        ...point,
+        leftPercent: points.length <= 1 ? 50 : 6 + ((index / (points.length - 1)) * 88),
+        topPercent: 100 - ((((point.speed - windChartMin) / windChartRange) * 68) + 14),
+    }));
+    const windPlotSegments = windPlotPoints.slice(0, -1).map((point, index) => {
+        const nextPoint = windPlotPoints[index + 1];
+        const deltaX = nextPoint.leftPercent - point.leftPercent;
+        const deltaY = nextPoint.topPercent - point.topPercent;
+
+        return {
+            key: `${point.time.toISOString()}-${nextPoint.time.toISOString()}`,
+            leftPercent: point.leftPercent,
+            topPercent: point.topPercent,
+            widthPercent: Math.hypot(deltaX, deltaY),
+            angle: Math.atan2(deltaY, deltaX) * (180 / Math.PI),
+        };
+    });
+    const windTrendDelta = windEndingSpeed - current.wind_speed_10m;
+    const windTrendLabel = Math.abs(windTrendDelta) < 2
+        ? "Steady"
+        : `${windTrendDelta > 0 ? "+" : ""}${Math.round(windTrendDelta)} ${weatherData.current_units.wind_speed_10m}`;
+    const windTrendDescriptor = Math.abs(windTrendDelta) < 2
+        ? "Little change expected"
+        : windTrendDelta > 0
+            ? "Building through the window"
+            : "Easing over the next few hours";
+    const WindTrendIcon = Math.abs(windTrendDelta) < 2
+        ? Minus
+        : windTrendDelta > 0
+            ? TrendingUp
+            : TrendingDown;
+    const windPeakLabel = windPeakPoint?.shortLabel ?? "Soon";
+    const currentWindLabel = formatWindSpeed(Math.round(current.wind_speed_10m), weatherData.current_units.wind_speed_10m);
+    const windAverageLabel = formatWindSpeed(Math.round(windAverage), weatherData.current_units.wind_speed_10m);
+    const windPeakSpeedLabel = formatWindSpeed(Math.round(windPeakSpeed), weatherData.current_units.wind_speed_10m);
+    const windSummaryLine = `${windHeadline}. Peak ${formatWindSpeed(Math.round(windPeakSpeed), weatherData.current_units.wind_speed_10m)} around ${windPeakLabel}.`;
+    const windExpandedContent = (
+        <>
+            <div className="conditions-ring-expanded-story">
+                <span className="conditions-ring-expanded-eyebrow">Wind outlook</span>
+                <p className="conditions-ring-expanded-copy">
+                    <span className="conditions-ring-expanded-strong">{windSummaryLine}</span>{" "}
+                    {windNarrative}
+                </p>
+            </div>
+
+            <div className="conditions-wind-band">
+                <div className="conditions-wind-band-head">
+                    <span>Next 6 hours</span>
+                    <span>{currentWindLabel} now</span>
+                </div>
+                <div className="conditions-wind-chart-card">
+                    <div className="conditions-wind-chart-head">
+                        <div className="conditions-wind-chart-title-group">
+                            <span className="conditions-wind-chart-kicker">Hourly trace</span>
+                            <p className="conditions-wind-chart-title">{getWindLabel(Math.round(windAverage))}</p>
+                        </div>
+                        <div className="conditions-wind-chart-trend">
+                            <WindTrendIcon size={14} strokeWidth={2.2} />
+                            <span>{windTrendLabel}</span>
+                        </div>
+                    </div>
+                    <div className="conditions-wind-chart">
+                        <div className="conditions-wind-chart-grid" aria-hidden="true">
+                            <span />
+                            <span />
+                            <span />
+                        </div>
+                        <div className="conditions-wind-chart-lines" aria-hidden="true">
+                            {windPlotSegments.map((segment) => (
+                                <span
+                                    key={segment.key}
+                                    className="conditions-wind-chart-segment"
+                                    style={{
+                                        left: `${segment.leftPercent}%`,
+                                        top: `${segment.topPercent}%`,
+                                        width: `${segment.widthPercent}%`,
+                                        transform: `translateY(-50%) rotate(${segment.angle}deg)`,
+                                    }}
+                                />
+                            ))}
+                        </div>
+                        <div className="conditions-wind-chart-points">
+                            {windPlotPoints.map((point) => (
+                                <span
+                                    key={point.time.toISOString()}
+                                    className="conditions-wind-chart-point"
+                                    style={{
+                                        left: `${point.leftPercent}%`,
+                                        top: `${point.topPercent}%`,
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                    <div
+                        className="conditions-wind-chart-labels"
+                        style={{ gridTemplateColumns: `repeat(${Math.max(windPlotPoints.length, 1)}, minmax(0, 1fr))` }}
+                    >
+                        {windPlotPoints.map((point) => (
+                            <div key={point.time.toISOString()} className="conditions-wind-chart-label-group">
+                                <span className="conditions-wind-chart-value">{Math.round(point.speed)}</span>
+                                <span className="conditions-wind-chart-label">{point.shortLabel}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            <div className="conditions-ring-expanded-stats">
+                <div className="conditions-ring-expanded-stat">
+                    <span className="conditions-ring-expanded-stat-label">Trend</span>
+                    <span className="conditions-ring-expanded-stat-value">{windTrendLabel}</span>
+                </div>
+                <div className="conditions-ring-expanded-stat">
+                    <span className="conditions-ring-expanded-stat-label">Peak</span>
+                    <span className="conditions-ring-expanded-stat-value">{windPeakSpeedLabel}</span>
+                </div>
+                <div className={`conditions-ring-expanded-stat ${metar ? "" : "conditions-ring-expanded-stat-full"}`}>
+                    <span className="conditions-ring-expanded-stat-label">{metar ? "Station" : "Average"}</span>
+                    <span className="conditions-ring-expanded-stat-value">{metar ? stationWind : windAverageLabel}</span>
+                    <span className="conditions-wind-stat-detail">{metar ? `${stationName} · ${stationIcaoId}` : windTrendDescriptor}</span>
+                </div>
+            </div>
+        </>
+    );
     const observedMetrics = [
         { label: "Wind", value: stationWind, detail: "Field observation" },
         { label: "Visibility", value: stationVisibility, detail: "Station report" },
@@ -1024,13 +1560,73 @@ export default function WeatherCard({
     const peakMinutelyChance = Math.round(Math.max(...minutelyTimeline.map((point) => point.precip_probability), 0) * 100);
 
     const currentPrecipChanceLabel = formatCurrentPrecipChance(current.precipitation_probability);
+    const feelsLikeDelta = feelsLike - currentTemp;
     const feelsLikeDetail = feelsLike === currentTemp
         ? "Matches the air temp"
         : `${feelsLike > currentTemp ? "+" : ""}${feelsLike - currentTemp}° vs actual`;
+    const dayRange = Math.max(dailyHigh - dailyLow, 1);
+    const resolvedFeelsLikeSummary = aiFeelsLikeSummary.trim() || `It feels like ${feelsLike}° right now, compared with an actual temperature of ${currentTemp}°.`;
+    const feelsLikeActualPosition = clampPercentage(((currentTemp - dailyLow) / dayRange) * 100);
+    const feelsLikePosition = clampPercentage(((feelsLike - dailyLow) / dayRange) * 100);
+    const feelsLikeBandStart = Math.min(feelsLikeActualPosition, feelsLikePosition);
+    const feelsLikeBandWidth = Math.max(Math.abs(feelsLikePosition - feelsLikeActualPosition), 3);
+    const feelsLikeBandStyle = feelsLikeDelta >= 0
+        ? "linear-gradient(90deg, rgba(251, 146, 60, 0.9), rgba(250, 204, 21, 0.82))"
+        : "linear-gradient(90deg, rgba(129, 140, 248, 0.9), rgba(56, 189, 248, 0.82))";
+    const feelsLikeDeltaLabel = feelsLikeDelta === 0
+        ? "No gap"
+        : `${feelsLikeDelta > 0 ? "+" : ""}${feelsLikeDelta}° swing`;
+    const feelsLikeExpandedContent = (
+        <>
+            <div className="conditions-ring-expanded-story">
+                <span className="conditions-ring-expanded-eyebrow">Apparent temperature</span>
+                <p className="conditions-ring-expanded-copy">{resolvedFeelsLikeSummary}</p>
+            </div>
+
+            <div className="conditions-feelslike-band">
+                <div className="conditions-feelslike-band-head">
+                    <span>Today&apos;s range</span>
+                    <span>{dailyLow}° to {dailyHigh}°</span>
+                </div>
+                <div className="conditions-feelslike-band-track">
+                    <div
+                        className="conditions-feelslike-band-span"
+                        style={{
+                            left: `${feelsLikeBandStart}%`,
+                            width: `${feelsLikeBandWidth}%`,
+                            background: feelsLikeBandStyle,
+                        }}
+                    />
+                    <span
+                        className="conditions-feelslike-band-marker conditions-feelslike-band-marker-actual"
+                        style={{ left: `${feelsLikeActualPosition}%` }}
+                    />
+                    <span
+                        className="conditions-feelslike-band-marker conditions-feelslike-band-marker-feels"
+                        style={{ left: `${feelsLikePosition}%` }}
+                    />
+                </div>
+                <div className="conditions-feelslike-band-legend">
+                    <span className="conditions-feelslike-band-legend-item">
+                        <span className="conditions-feelslike-band-dot conditions-feelslike-band-dot-actual" />
+                        Actual {currentTemp}°
+                    </span>
+                    <span className="conditions-feelslike-band-legend-item">
+                        <span className="conditions-feelslike-band-dot conditions-feelslike-band-dot-feels" />
+                        Feels like {feelsLike}°
+                    </span>
+                </div>
+            </div>
+
+            <div className="conditions-ring-expanded-stat conditions-ring-expanded-stat-full">
+                <span className="conditions-ring-expanded-stat-label">Delta</span>
+                <span className="conditions-ring-expanded-stat-value">{feelsLikeDeltaLabel}</span>
+            </div>
+        </>
+    );
     const conditionsHeroSummary = currentPrecipChanceLabel === "Low"
         ? `${currentCondition} right now with no immediate rain signal.`
         : `${currentCondition} right now with ${currentPrecipChanceLabel} precip potential in the mix.`;
-    const dayRange = Math.max(dailyHigh - dailyLow, 1);
     const primaryConditionSignals = [
         {
             key: "feels-like",
@@ -1541,6 +2137,7 @@ export default function WeatherCard({
                                                 key={stat.key}
                                                 icon={stat.icon}
                                                 label={stat.label}
+                                                labelText={stat.label}
                                                 value={stat.value}
                                                 detail={stat.detail}
                                                 aggregated={stat.aggregated}
@@ -1550,6 +2147,18 @@ export default function WeatherCard({
                                                 badgeClassName={stat.badgeClassName}
                                                 accentStyle={stat.accentStyle}
                                                 animationDelayMs={index * 40}
+                                                expandable={stat.key === "feels-like" || stat.key === "wind"}
+                                                expanded={expandedConditionMetric === stat.key}
+                                                expandedContent={
+                                                    stat.key === "feels-like"
+                                                        ? feelsLikeExpandedContent
+                                                        : stat.key === "wind"
+                                                            ? windExpandedContent
+                                                            : null
+                                                }
+                                                onToggle={stat.key === "feels-like" || stat.key === "wind"
+                                                    ? () => setExpandedConditionMetric((currentKey) => currentKey === stat.key ? null : stat.key)
+                                                    : undefined}
                                             />
                                         ))}
                                     </div>
@@ -2000,66 +2609,205 @@ export default function WeatherCard({
                     <ChevronDown className={`theme-subtle h-5 w-5 shrink-0 transition-transform ${openDetailSections.extras ? "rotate-180" : ""}`} />
                 </button>
                 <CollapsiblePanel open={openDetailSections.extras} className="w-full">
-                    <div className="flex flex-col gap-6 pt-2">
-                        {astronomy && (
+                    <div className="extras-section-shell flex flex-col gap-6 pt-2">
+                        {astronomy && moonCycle && (
                             <div className="flex flex-col gap-2">
                                 <span className={sectionLabelClass}>Moon</span>
-                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                    <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1 text-center">
-                                        <Moon className="text-indigo-400" size={18} />
-                                        <span className="theme-section-label text-[10px] font-bold">Phase</span>
-                                        <span className="font-semibold text-sm leading-tight">{astronomy.moon_phase}</span>
-                                    </div>
-                                    <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1 text-center">
-                                        <SunDim className="text-amber-400" size={18} />
-                                        <span className="theme-section-label text-[10px] font-bold">Illumination</span>
-                                        <span className="font-semibold text-sm leading-tight">{Math.round(astronomy.moon_illumination)}%</span>
-                                    </div>
-                                    {astronomy.moonrise && astronomy.moonrise !== "No moonrise" && (
-                                        <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1 text-center">
-                                            <TrendingUp className="text-indigo-400" size={18} />
-                                            <span className="theme-section-label text-[10px] font-bold">Rise</span>
-                                            <span className="font-semibold text-sm leading-tight">{astronomy.moonrise}</span>
+                                <div className="moon-showcase surface-card-strong" style={moonShowcaseStyle}>
+                                    <div className="moon-showcase__inner">
+                                        <div className="moon-showcase__visual">
+                                            <div className="moon-showcase__orbital">
+
+                                                <MoonPhaseOrb
+                                                    phaseFraction={moonCycle.cycleFraction}
+                                                    accentColor={moonCycle.currentPhase.accent}
+                                                />
+                                            </div>
+                                            <div className="moon-showcase__cycle-pill surface-chip">
+                                                <span>Cycle day</span>
+                                                <strong>{moonCycle.cycleDay.toFixed(1)} / 29.5</strong>
+                                            </div>
                                         </div>
-                                    )}
-                                    {astronomy.moonset && astronomy.moonset !== "No moonset" && (
-                                        <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1 text-center">
-                                            <TrendingDown className="text-indigo-400" size={18} />
-                                            <span className="theme-section-label text-[10px] font-bold">Set</span>
-                                            <span className="font-semibold text-sm leading-tight">{astronomy.moonset}</span>
+
+                                        <div className="moon-showcase__content">
+                                            <div className="moon-showcase__badges">
+                                                <span className="moon-showcase__badge">
+                                                    <Sparkles size={12} />
+                                                    {moonCycle.trendLabel}
+                                                </span>
+                                                <span className="moon-showcase__badge">
+                                                    <SunDim size={12} />
+                                                    {Math.round(astronomy.moon_illumination)}% lit
+                                                </span>
+                                            </div>
+
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="moon-showcase__eyebrow">Tonight&apos;s moon</p>
+                                                        <h3 className="moon-showcase__title">{astronomy.moon_phase}</h3>
+                                                    </div>
+                                                    <span className="moon-showcase__emoji" aria-hidden="true">{moonCycle.currentPhase.emoji}</span>
+                                                </div>
+                                                <p className="moon-showcase__description">{moonCycle.currentPhase.description}</p>
+                                                <p className="moon-showcase__summary">{moonCycle.summary}</p>
+                                            </div>
+
+                                            <div className="moon-showcase__progress">
+                                                <div className="moon-showcase__progress-head">
+                                                    <span>Lunation progress</span>
+                                                    <span>{Math.round(moonCycle.cycleFraction * 100)}%</span>
+                                                </div>
+                                                <div className="moon-showcase__progress-track" aria-hidden="true">
+                                                    <span
+                                                        className="moon-showcase__progress-fill"
+                                                        style={{ width: `${Math.max(moonCycle.cycleFraction * 100, 4)}%` }}
+                                                    />
+                                                    {[0, 25, 50, 75].map((marker) => (
+                                                        <span
+                                                            key={marker}
+                                                            className="moon-showcase__progress-marker"
+                                                            style={{ left: `${marker}%` }}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div className="moon-showcase__stats">
+                                                <div className="moon-showcase__stat">
+                                                    <span className="moon-showcase__stat-label">Next milestone</span>
+                                                    <span className="moon-showcase__stat-value">{moonCycle.nextMajorPhase.label}</span>
+                                                    <span className="moon-showcase__stat-meta">
+                                                        {formatMoonCalendarLabel(moonCycle.nextMajorPhase.date, localTimestamp)} · {formatMoonCountdown(moonCycle.nextMajorPhase.daysAway)}
+                                                    </span>
+                                                </div>
+                                                <div className="moon-showcase__stat">
+                                                    <span className="moon-showcase__stat-label">Full moon</span>
+                                                    <span className="moon-showcase__stat-value">{fullMoonValue}</span>
+                                                    <span className="moon-showcase__stat-meta">{fullMoonMeta}</span>
+                                                </div>
+                                                <div className="moon-showcase__stat">
+                                                    <span className="moon-showcase__stat-label">Moonrise</span>
+                                                    <span className="moon-showcase__stat-value">{moonriseLabel}</span>
+                                                    <span className="moon-showcase__stat-meta">Local horizon time</span>
+                                                </div>
+                                                <div className="moon-showcase__stat">
+                                                    <span className="moon-showcase__stat-label">Moonset</span>
+                                                    <span className="moon-showcase__stat-value">{moonsetLabel}</span>
+                                                    <span className="moon-showcase__stat-meta">Local horizon time</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                    )}
+                                    </div>
+
+                                    <div className="moon-phase-track hide-scrollbar" aria-label="Moon phase cycle">
+                                        {moonCycle.phaseTrack.map((stop) => (
+                                            <div
+                                                key={stop.key}
+                                                className={`moon-phase-track__item ${stop.active ? "moon-phase-track__item--active" : ""}`}
+                                            >
+                                                <MoonPhaseOrb
+                                                    phaseFraction={stop.cycleFraction}
+                                                    accentColor={moonCycle.currentPhase.accent}
+                                                    size="track"
+                                                />
+                                                <span className="moon-phase-track__label">{stop.shortLabel}</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         )}
 
-                        {marine && marine.current && (
-                            <div className="flex flex-col gap-2">
-                                <span className={sectionLabelClass}>Marine</span>
-                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                                    <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
-                                        <Waves className="text-blue-500" size={18} />
-                                        <span className="theme-section-label text-[10px] font-bold">Height</span>
-                                        <span className="font-semibold text-sm">
-                                            {marine.current.wave_height != null
-                                                ? distUnit === "mph"
-                                                    ? `${(marine.current.wave_height * 3.281).toFixed(1)} ft`
-                                                    : `${marine.current.wave_height.toFixed(1)} m`
-                                                : "—"}
+                        {marineCurrent && (
+                            <section className="extras-showcase-card extras-marine-card surface-card rounded-[30px] p-4 sm:p-5">
+                                <div className="extras-panel-kicker">
+                                    <div className="flex items-center gap-2">
+                                        <span className={sectionLabelClass}>Marine</span>
+                                        <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
+                                            {marineConditionCopy.eyebrow}
                                         </span>
                                     </div>
-                                    <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
-                                        <Waves className="text-cyan-500" size={18} />
-                                        <span className="theme-section-label text-[10px] font-bold">Direction</span>
-                                        <span className="font-semibold text-sm">{marine.current.wave_direction != null ? waveDirectionToCardinal(marine.current.wave_direction) : "—"}</span>
+                                    <span className="theme-subtle text-[11px] font-semibold">Coastal signal</span>
+                                </div>
+
+                                <div className="marine-brief mt-4">
+                                    <div className="marine-brief-grid">
+                                        <div className="marine-brief-main">
+                                            <div className="marine-brief-copy-wrap">
+                                                <p className="marine-brief-eyebrow">Coastal Brief</p>
+                                                <div className="marine-brief-height-row">
+                                                    <span className="marine-brief-height">{marineWaveHeightDisplay}</span>
+                                                    <span className="marine-brief-height-caption">wave height</span>
+                                                </div>
+                                                <p className="marine-brief-copy">
+                                                    {marineConditionCopy.description}
+                                                </p>
+                                            </div>
+
+                                            <div className="marine-brief-stat-grid">
+                                                <div className="marine-brief-stat">
+                                                    <span className="marine-brief-stat-label">Period</span>
+                                                    <span className="marine-brief-stat-value">{marineWavePeriodDisplay}</span>
+                                                    <span className="marine-brief-stat-meta">set spacing</span>
+                                                </div>
+                                                <div className="marine-brief-stat">
+                                                    <span className="marine-brief-stat-label">Direction</span>
+                                                    <span className="marine-brief-stat-value">{marineWaveDirectionDisplay}</span>
+                                                    <span className="marine-brief-stat-meta">{marineWaveDirectionDegrees}</span>
+                                                </div>
+                                                <div className="marine-brief-stat">
+                                                    <span className="marine-brief-stat-label">Energy</span>
+                                                    <span className="marine-brief-stat-value">{marineEnergyLabel}</span>
+                                                    <span className="marine-brief-stat-meta">
+                                                        {marineEnergyProgress > 0 ? `${Math.round(marineEnergyProgress)}% signal` : "current feed"}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="marine-brief-dial-card">
+                                            <div className="marine-brief-dial">
+                                                <span className="marine-brief-dial-label marine-brief-dial-label-n">N</span>
+                                                <span className="marine-brief-dial-label marine-brief-dial-label-e">E</span>
+                                                <span className="marine-brief-dial-label marine-brief-dial-label-s">S</span>
+                                                <span className="marine-brief-dial-label marine-brief-dial-label-w">W</span>
+                                                <div className="marine-brief-dial-ring" />
+                                                <div
+                                                    className="marine-brief-dial-pointer"
+                                                    style={{
+                                                        transform: `translateX(-50%) rotate(${marineWaveDirection ?? 0}deg)`,
+                                                        opacity: marineWaveDirection != null ? 1 : 0.4,
+                                                    }}
+                                                />
+                                                <div className="marine-brief-dial-center" />
+                                            </div>
+                                            <div className="marine-brief-dial-meta">
+                                                <p className="marine-brief-dial-title">Direction</p>
+                                                <p className="marine-brief-dial-value">{marineWaveDirectionDisplay}</p>
+                                                <p className="marine-brief-dial-subtitle">{marineWaveDirectionDegrees}</p>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
-                                        <Waves className="text-teal-500" size={18} />
-                                        <span className="theme-section-label text-[10px] font-bold">Period</span>
-                                        <span className="font-semibold text-sm">{marine.current.wave_period != null ? `${marine.current.wave_period.toFixed(1)}s` : "—"}</span>
+
+                                    <div className="marine-brief-energy">
+                                        <div className="marine-brief-energy-head">
+                                            <span>Surface energy</span>
+                                            <span>{marineEnergyProgress > 0 ? `${Math.round(marineEnergyProgress)}%` : "No reading"}</span>
+                                        </div>
+                                        <div className="marine-brief-energy-track">
+                                            <div
+                                                className="marine-brief-energy-fill"
+                                                style={{ width: `${marineEnergyProgress}%` }}
+                                            />
+                                        </div>
+                                        <div className="marine-brief-energy-foot">
+                                            <span>{marineEnergyLabel}</span>
+                                            <span>Latest available snapshot</span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            </section>
                         )}
 
                         {(histHigh !== null || climateNormal || riverDischarge !== null) && (
@@ -2155,17 +2903,17 @@ export default function WeatherCard({
                                                 {(riverDischargeMin !== null || riverDischargeMean !== null || riverDischargeMax !== null) && hasRiverBandSpread && (
                                                     <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                                                         <div className="surface-tile rounded-xl p-2">
-                                                        <p className="theme-section-label text-[10px] font-bold">Low</p>
-                                                        <p className="font-semibold text-sm">{riverDischargeMin?.toFixed(1) ?? "—"}</p>
-                                                    </div>
+                                                            <p className="theme-section-label text-[10px] font-bold">Low</p>
+                                                            <p className="font-semibold text-sm">{riverDischargeMin?.toFixed(1) ?? "—"}</p>
+                                                        </div>
                                                         <div className="surface-tile rounded-xl p-2">
-                                                        <p className="theme-section-label text-[10px] font-bold">Typical</p>
-                                                        <p className="font-semibold text-sm">{riverDischargeMean?.toFixed(1) ?? "—"}</p>
-                                                    </div>
+                                                            <p className="theme-section-label text-[10px] font-bold">Typical</p>
+                                                            <p className="font-semibold text-sm">{riverDischargeMean?.toFixed(1) ?? "—"}</p>
+                                                        </div>
                                                         <div className="surface-tile rounded-xl p-2">
-                                                        <p className="theme-section-label text-[10px] font-bold">High</p>
-                                                        <p className="font-semibold text-sm">{riverDischargeMax?.toFixed(1) ?? "—"}</p>
-                                                    </div>
+                                                            <p className="theme-section-label text-[10px] font-bold">High</p>
+                                                            <p className="font-semibold text-sm">{riverDischargeMax?.toFixed(1) ?? "—"}</p>
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>

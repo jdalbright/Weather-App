@@ -119,6 +119,7 @@ type ChatAdviceResponse = {
   heroText?: string;
   next24Text?: string;
   airQualityText?: string;
+  feelsLikeText?: string;
   adviceText?: string;
   text?: string;
 };
@@ -273,6 +274,7 @@ export default function Home() {
   const [aiHeroSummary, setAiHeroSummary] = useState("");
   const [aiNext24Summary, setAiNext24Summary] = useState("");
   const [aiAirQualitySummary, setAiAirQualitySummary] = useState("");
+  const [aiFeelsLikeSummary, setAiFeelsLikeSummary] = useState("");
   const [aiAdvice, setAiAdvice] = useState("");
   const [theme, setTheme] = useState("theme-sun");
   const [appearance, setAppearance] = useState<Appearance>("system");
@@ -461,6 +463,7 @@ export default function Home() {
       const nextHeroSummary = typeof json.heroText === "string" ? json.heroText.trim() : "";
       const nextNext24Summary = typeof json.next24Text === "string" ? json.next24Text.trim() : "";
       const nextAirQualitySummary = typeof json.airQualityText === "string" ? json.airQualityText.trim() : "";
+      const nextFeelsLikeSummary = typeof json.feelsLikeText === "string" ? json.feelsLikeText.trim() : "";
       const nextAdvice = typeof json.adviceText === "string"
         ? json.adviceText.trim()
         : typeof json.text === "string"
@@ -471,6 +474,7 @@ export default function Home() {
         setAiHeroSummary(nextHeroSummary);
         setAiNext24Summary(nextNext24Summary);
         setAiAirQualitySummary(nextAirQualitySummary);
+        setAiFeelsLikeSummary(nextFeelsLikeSummary);
         setAiAdvice(nextAdvice);
       }
     } catch {
@@ -478,6 +482,7 @@ export default function Home() {
         setAiHeroSummary("");
         setAiNext24Summary("");
         setAiAirQualitySummary("");
+        setAiFeelsLikeSummary("");
         setAiAdvice("Failed to get advice.");
       }
     }
@@ -490,6 +495,7 @@ export default function Home() {
     setAiHeroSummary("");
     setAiNext24Summary("");
     setAiAirQualitySummary("");
+    setAiFeelsLikeSummary("");
     setAiAdvice("");
 
     // Check cache before firing any network requests
@@ -1240,6 +1246,7 @@ export default function Home() {
           aiHeroSummary={aiHeroSummary}
           aiNext24Summary={aiNext24Summary}
           aiAirQualitySummary={aiAirQualitySummary}
+          aiFeelsLikeSummary={aiFeelsLikeSummary}
           aiAdvice={aiAdvice}
           allPersonalities={allPersonalities}
           personalityId={personality}

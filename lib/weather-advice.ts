@@ -34,10 +34,10 @@ export function buildForecastWeatherPrompt(weather?: ChatWeatherPayload): string
 
 export function buildAirQualityPrompt(weather?: ChatWeatherPayload): string {
   return [
-    "Air quality data for one location.",
+    "Air quality and apparent-temperature data for one location.",
     weather?.aqi != null ? `Current US AQI: ${weather.aqi}.` : "Current US AQI: unavailable.",
-    `Current weather context: ${weather?.temp ?? "?"}°${weather?.unit ?? "F"}, ${weather?.condition ?? "Unknown conditions"}.`,
-    "Write only about current air quality impact and keep it separate from the general forecast.",
+    `Current weather context: ${weather?.temp ?? "?"}°${weather?.unit ?? "F"}, feels like ${weather?.feelsLike ?? "?"}°, ${weather?.condition ?? "Unknown conditions"}, wind ${weather?.windSpeed ?? "Unknown"}.`,
+    "Write only about current air quality impact and current apparent temperature, and keep both separate from the general forecast.",
   ]
     .filter(Boolean)
     .join(" ");

@@ -22,6 +22,7 @@ const forecastAdviceSchema = z.object({
 
 const airQualityAdviceSchema = z.object({
   airQualityText: z.string().min(1),
+  feelsLikeText: z.string().min(1),
 });
 
 function getSystemPrompt(body: ChatRequestBody): string {
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
         heroText: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] Right now it is ${body.weather?.condition ?? "unclear"} and ${body.weather?.temp ?? "?"}°${body.weather?.unit ?? "F"}.`,
         next24Text: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] ${body.weather?.condition ?? "Unclear weather"} holds into the next stretch with highs near ${body.weather?.highTemp ?? "?"}° and lows near ${body.weather?.lowTemp ?? "?"}°.`,
         airQualityText: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] Air quality is ${body.weather?.aqi ?? "?"} on the US AQI scale right now.`,
+        feelsLikeText: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] It feels like ${body.weather?.feelsLike ?? "?"}° right now compared with an actual temperature of ${body.weather?.temp ?? "?"}°${body.weather?.unit ?? "F"}.`,
         adviceText: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] It is ${body.weather?.temp ?? "?"}°${body.weather?.unit ?? "F"} with ${body.weather?.condition ?? "unclear conditions"}. Dress for it and adjust your plans if needed.`,
       });
     }
@@ -78,11 +80,15 @@ export async function POST(req: Request) {
 
     const airQualityPrompt = [
       buildAirQualityPrompt(body.weather),
-      "Return one string field: airQualityText.",
+      "Return two string fields: airQualityText and feelsLikeText.",
       "airQualityText: one or two short sentences for the Air Quality card.",
       "airQualityText should describe what the current AQI means in plain English, in the active personality voice.",
       "airQualityText should stay focused on current air quality only, and may mention who should care if the reading is elevated.",
       "If AQI data is missing or clearly minimal, keep airQualityText brief and non-dramatic.",
+      "feelsLikeText: one or two short sentences for the expanded Feels Like card.",
+      "feelsLikeText should describe how the apparent temperature compares with the actual temperature right now, in the active personality voice.",
+      "feelsLikeText may mention the current feels-like value, actual temperature, and wind if useful.",
+      "feelsLikeText must stay focused on current feel only and must not mention AQI, pollution, forecast changes, highs, lows, or future timing.",
       "No markdown, labels, or quotes.",
     ].join(" ");
 
@@ -110,7 +116,7 @@ export async function POST(req: Request) {
     const errorMessage = error instanceof Error ? error.message : "";
 
     return Response.json(
-      { heroText: "", next24Text: "", airQualityText: "", adviceText: `Sorry, I'm feeling under the weather. ${errorMessage}`.trim() },
+      { heroText: "", next24Text: "", airQualityText: "", feelsLikeText: "", adviceText: `Sorry, I'm feeling under the weather. ${errorMessage}`.trim() },
       { status: 500 }
     );
   }
