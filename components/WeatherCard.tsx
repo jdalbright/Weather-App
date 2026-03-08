@@ -10,6 +10,7 @@ import {
     parseLocationDate,
     parseLocationDateTime,
     getAQILevel,
+    getAirQualitySummary,
     waveDirectionToCardinal,
     type AirQualityData,
     type MarineData,
@@ -28,9 +29,19 @@ import CollapsiblePanel from "@/components/CollapsiblePanel";
 import { Next24HoursChart, type HourlyForecastPoint } from "@/components/Next24HoursChart";
 import VoiceSettingsMenu from "@/components/VoiceSettingsMenu";
 import {
+    Area,
+    AreaChart,
+    CartesianGrid,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+} from "recharts";
+import {
     Thermometer,
     Wind,
     Droplets,
+    Gauge,
     Sun,
     Moon,
     SunDim,
@@ -55,6 +66,7 @@ import {
     HandHeart,
     Heart,
     ChevronDown,
+    MapPin,
     Search as SearchIcon,
     ShieldAlert,
     Sparkles,
@@ -94,11 +106,9 @@ const PersonalityIconMap = {
 } as const;
 
 const sectionLabelClass = "theme-section-label ml-2 text-sm font-bold";
-const statTileClass = "surface-tile flex items-center gap-3 rounded-2xl p-3";
-const statValueClass = "theme-heading font-semibold";
-const heroCardClass = "weather-card-hero surface-card-strong relative overflow-hidden rounded-[32px] px-5 py-6 sm:px-8 sm:py-8";
+const heroCardClass = "weather-card-hero surface-card-strong relative overflow-hidden rounded-[32px] px-4 py-5 sm:px-6 sm:py-6";
 
-const insightPillClass = "weather-card-insight-pill flex h-full w-full min-w-0 flex-col rounded-[24px] border border-soft-var bg-surface-chip-var px-3.5 py-3 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover-border-strong-var shadow-soft-var";
+const insightPillClass = "weather-card-insight-pill flex w-full min-w-0 flex-col overflow-hidden rounded-[22px] border border-soft-var bg-surface-chip-var px-3 py-2.5 text-left transition-all active:opacity-70 hover:-translate-y-0.5 hover-border-strong-var shadow-soft-var";
 const insightPillOpenClass = "border-accent-var bg-surface-elevated-var shadow-soft-var";
 const sectionAccordionButtonClass = "surface-tile flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[24px] px-4 py-3 text-left transition-all hover-border-strong-var hover-bg-surface-elevated-var";
 const MIN_FORECAST_CHANCE_TO_SHOW = 15;
@@ -140,6 +150,28 @@ type DailyOutlookDay = {
     dayPrecipProbability: number;
     showRainChance: boolean;
 };
+type HistoricalRangeItem = {
+    key: string;
+    label: string;
+    subLabel: string;
+    low: number;
+    high: number;
+    accentClass: string;
+};
+type ObservedTempChartPoint = {
+    value: number;
+    shortLabel: string;
+    axisLabel: string;
+    fullLabel: string;
+    isLatest: boolean;
+};
+
+type ObservedTempTooltipProps = {
+    active?: boolean;
+    payload?: Array<{
+        payload: ObservedTempChartPoint;
+    }>;
+};
 
 function shouldShowForecastChance(probability: number | null | undefined): probability is number {
     return probability != null && probability >= MIN_FORECAST_CHANCE_TO_SHOW;
@@ -148,6 +180,71 @@ function shouldShowForecastChance(probability: number | null | undefined): proba
 function formatCurrentPrecipChance(probability: number): string {
     if (probability < MIN_FORECAST_CHANCE_TO_SHOW) return "Low";
     return `${probability}%`;
+}
+
+function clamp(value: number, min: number, max: number): number {
+    return Math.min(Math.max(value, min), max);
+}
+
+function getAirQualityTone(aqi: number): {
+    accent: string;
+    accentSoft: string;
+    accentStrong: string;
+    fill: string;
+    glow: string;
+} {
+    if (aqi <= 50) {
+        return {
+            accent: "#4ade80",
+            accentSoft: "rgba(74, 222, 128, 0.14)",
+            accentStrong: "rgba(16, 185, 129, 0.24)",
+            fill: "linear-gradient(90deg, rgba(74, 222, 128, 0.95), rgba(45, 212, 191, 0.9))",
+            glow: "0 0 30px rgba(74, 222, 128, 0.28)",
+        };
+    }
+    if (aqi <= 100) {
+        return {
+            accent: "#facc15",
+            accentSoft: "rgba(250, 204, 21, 0.14)",
+            accentStrong: "rgba(245, 158, 11, 0.26)",
+            fill: "linear-gradient(90deg, rgba(250, 204, 21, 0.95), rgba(251, 191, 36, 0.88))",
+            glow: "0 0 30px rgba(250, 204, 21, 0.24)",
+        };
+    }
+    if (aqi <= 150) {
+        return {
+            accent: "#fb923c",
+            accentSoft: "rgba(251, 146, 60, 0.14)",
+            accentStrong: "rgba(249, 115, 22, 0.26)",
+            fill: "linear-gradient(90deg, rgba(251, 146, 60, 0.95), rgba(248, 113, 113, 0.88))",
+            glow: "0 0 30px rgba(251, 146, 60, 0.24)",
+        };
+    }
+    if (aqi <= 200) {
+        return {
+            accent: "#f87171",
+            accentSoft: "rgba(248, 113, 113, 0.14)",
+            accentStrong: "rgba(239, 68, 68, 0.26)",
+            fill: "linear-gradient(90deg, rgba(248, 113, 113, 0.95), rgba(244, 63, 94, 0.88))",
+            glow: "0 0 30px rgba(248, 113, 113, 0.24)",
+        };
+    }
+    if (aqi <= 300) {
+        return {
+            accent: "#c084fc",
+            accentSoft: "rgba(192, 132, 252, 0.14)",
+            accentStrong: "rgba(168, 85, 247, 0.26)",
+            fill: "linear-gradient(90deg, rgba(192, 132, 252, 0.95), rgba(129, 140, 248, 0.88))",
+            glow: "0 0 30px rgba(192, 132, 252, 0.24)",
+        };
+    }
+    return {
+        accent: "#fb7185",
+        accentSoft: "rgba(251, 113, 133, 0.14)",
+        accentStrong: "rgba(244, 63, 94, 0.26)",
+        fill: "linear-gradient(90deg, rgba(251, 113, 133, 0.95), rgba(225, 29, 72, 0.88))",
+        glow: "0 0 30px rgba(251, 113, 133, 0.24)",
+    };
 }
 
 function getForecastDaypartKey(date: Date): ForecastDaypartKey {
@@ -420,6 +517,144 @@ function MetricLabel({
     );
 }
 
+function ObservedTempTooltip({ active, payload }: ObservedTempTooltipProps) {
+    if (!active || !payload?.length) return null;
+
+    const data = payload[0]?.payload;
+    if (!data) return null;
+
+    return (
+        <div className="surface-card-strong min-w-[132px] rounded-[18px] border border-soft-var px-3 py-2 shadow-soft-var">
+            <p className="theme-heading text-sm font-bold">{data.fullLabel}</p>
+            <p className="mt-1 text-sm font-bold text-indigo-300">{Math.round(data.value)}&deg;</p>
+        </div>
+    );
+}
+
+function formatStatPercent(value: number): string {
+    return `${Math.round(value)}%`;
+}
+
+function getHumidityLabel(value: number): string {
+    if (value < 35) return "Dry air";
+    if (value < 60) return "Comfortable";
+    if (value < 75) return "Muggy";
+    return "Very humid";
+}
+
+function getCloudCoverLabel(value: number): string {
+    if (value < 15) return "Mostly clear";
+    if (value < 45) return "A few clouds";
+    if (value < 75) return "Partly cloudy";
+    return "Mostly cloudy";
+}
+
+function getUvLabel(value: number): string {
+    if (value < 3) return "Low";
+    if (value < 6) return "Moderate";
+    if (value < 8) return "High";
+    if (value < 11) return "Very high";
+    return "Extreme";
+}
+
+function getWindLabel(speed: number): string {
+    if (speed < 5) return "Calm";
+    if (speed < 12) return "Light breeze";
+    if (speed < 20) return "Steady breeze";
+    if (speed < 30) return "Breezy";
+    return "Strong wind";
+}
+
+function getVisibilityLabel(meters: number, currentUnitsVisibility: string): string {
+    const miles = currentUnitsVisibility === "m" ? meters / 1609.34 : meters / 5280;
+    if (miles >= 10) return "Far-reaching view";
+    if (miles >= 6) return "Clear enough";
+    if (miles >= 3) return "Slight haze";
+    return "Reduced view";
+}
+
+function clampPercentage(value: number): number {
+    return Math.max(0, Math.min(100, value));
+}
+
+function ConditionRingMetric({
+    icon,
+    label,
+    value,
+    detail,
+    aggregated = false,
+    aggregatedTitle,
+    progress,
+    stroke,
+    glow,
+    badgeClassName,
+    accentStyle,
+    animationDelayMs = 0,
+}: {
+    icon: ReactNode;
+    label: ReactNode;
+    value: string;
+    detail: string;
+    aggregated?: boolean;
+    aggregatedTitle?: string;
+    progress: number;
+    stroke: string;
+    glow: string;
+    badgeClassName: string;
+    accentStyle?: CSSProperties;
+    animationDelayMs?: number;
+}) {
+    const normalizedProgress = clampPercentage(progress);
+    const circumference = 2 * Math.PI * 44;
+    const statStyle = {
+        "--ring-circumference": circumference,
+        "--ring-offset": circumference * (1 - normalizedProgress / 100),
+        "--ring-rotation": `${normalizedProgress * 3.6 - 90}deg`,
+        "--ring-stroke": stroke,
+        "--ring-glow": glow,
+        "--metric-delay": `${animationDelayMs}ms`,
+        ...accentStyle,
+        animationDelay: `${animationDelayMs}ms`,
+    } as CSSProperties;
+
+    return (
+        <article
+            className="conditions-ring-metric"
+            style={statStyle}
+        >
+            <div className="conditions-ring-metric-sheen" aria-hidden="true" />
+            <div className="conditions-ring-metric-head">
+                <div className="conditions-ring-metric-title-group">
+                    <span className="conditions-ring-metric-label theme-section-label text-[10px] font-bold">{label}</span>
+                    {aggregated ? <AggregatedMetricBadge title={aggregatedTitle} /> : null}
+                </div>
+                <div className={`conditions-ring-icon ${badgeClassName}`}>
+                    {icon}
+                </div>
+            </div>
+            <div className="conditions-ring-visual">
+                <svg
+                    aria-hidden="true"
+                    viewBox="0 0 100 100"
+                    className="conditions-ring-svg"
+                >
+                    <circle className="conditions-ring-track" cx="50" cy="50" r="44" />
+                    <circle className="conditions-ring-progress" cx="50" cy="50" r="44" />
+                </svg>
+                <span className="conditions-ring-marker" aria-hidden="true" />
+                <div className="conditions-ring-value-wrap">
+                    <div className="conditions-ring-core">
+                        <p className="conditions-ring-value">{value}</p>
+                    </div>
+                </div>
+            </div>
+            <div className="conditions-ring-detail-wrap">
+                <p className="conditions-ring-detail">{detail}</p>
+            </div>
+        </article>
+    );
+}
+
 type WeatherCardProps = {
     locationName: string,
     weatherData: WeatherData | null,
@@ -427,6 +662,7 @@ type WeatherCardProps = {
     onToggleDetail: () => void,
     aiHeroSummary: string,
     aiNext24Summary: string,
+    aiAirQualitySummary: string,
     aiAdvice: string,
     allPersonalities: Personality[],
     personalityId: string,
@@ -464,6 +700,7 @@ export default function WeatherCard({
     onToggleDetail,
     aiHeroSummary,
     aiNext24Summary,
+    aiAirQualitySummary,
     aiAdvice,
     allPersonalities,
     personalityId,
@@ -494,6 +731,7 @@ export default function WeatherCard({
     const [showConfidenceDetail, setShowConfidenceDetail] = useState(false);
     const [showStationDetail, setShowStationDetail] = useState(false);
     const [showMinutelyDetail, setShowMinutelyDetail] = useState(false);
+    const [showAirQualityDetail, setShowAirQualityDetail] = useState(false);
     const [showFullTenDayOutlook, setShowFullTenDayOutlook] = useState(false);
     const [isVoiceMenuOpen, setIsVoiceMenuOpen] = useState(false);
     const [expandedAlertKey, setExpandedAlertKey] = useState<string | null>(null);
@@ -519,7 +757,7 @@ export default function WeatherCard({
     const iconBadgeStyle = isNightIcon
         ? { background: "radial-gradient(circle at top, rgba(255,255,255,0.18), rgba(255,255,255,0.02) 40%), linear-gradient(160deg, #0f172a, #1e3a5f 55%, #312e81)" }
         : { background: "radial-gradient(circle at top, #ffffff, #f8fafc 55%, #e2e8f0)" };
-    const iconSize = isNightIcon ? 88 : 84;
+    const iconSize = isNightIcon ? 72 : 68;
     const PersonalityIcon = PersonalityIconMap[selectedPersonality.icon];
 
     const dailyHigh = Math.round(weatherData.daily.temperature_2m_max[0]);
@@ -528,6 +766,7 @@ export default function WeatherCard({
     const localTimestamp = getLocalTimeForOffset(weatherData.utc_offset_seconds);
     const localTimeLabel = format(localTimestamp, "h:mm a");
     const heroSummary = aiHeroSummary.trim();
+    const resolvedAirQualitySummary = aiAirQualitySummary.trim();
     const resolvedAdvice = (aiAdvice || "Looking out the window...").trim();
     const handleVoiceSelection = (nextPersonalityId: string) => {
         onPersonalityChange(nextPersonalityId);
@@ -559,18 +798,85 @@ export default function WeatherCard({
     // AQI
     const aqiValue = airQuality?.current?.us_aqi ?? null;
     const aqiLevel = aqiValue !== null ? getAQILevel(aqiValue) : null;
+    const aqiTone = aqiValue !== null ? getAirQualityTone(aqiValue) : null;
+    const aqiProgress = aqiValue !== null
+        ? aqiValue === 0
+            ? 0
+            : clamp((aqiValue / 300) * 100, 4, 100)
+        : 0;
+    const airQualitySummary = aqiLevel ? getAirQualitySummary(aqiLevel.label) : null;
+    const airQualityMetrics = [
+        { label: "US AQI", value: aqiValue?.toFixed(0) ?? "—", detail: "Primary index" },
+        { label: "EU AQI", value: airQuality?.current?.european_aqi?.toFixed(0) ?? "—", detail: "Alternate scale" },
+        { label: "PM2.5", value: airQuality?.current?.pm2_5?.toFixed(1) ?? "—", detail: "Fine particles" },
+        { label: "PM10", value: airQuality?.current?.pm10?.toFixed(1) ?? "—", detail: "Larger dust" },
+        { label: "Ozone", value: airQuality?.current?.ozone?.toFixed(0) ?? "—", detail: "Surface ozone" },
+        { label: "NO2", value: airQuality?.current?.nitrogen_dioxide?.toFixed(1) ?? "—", detail: "Traffic-related gas" },
+        { label: "CO", value: airQuality?.current?.carbon_monoxide?.toFixed(0) ?? "—", detail: "Combustion marker" },
+    ];
+    const aqiScaleStops = [0, 50, 100, 150, 200, 300];
 
     // Pollen (first hourly slot)
     const grassPollen = airQuality?.hourly?.grass_pollen?.[0] ?? null;
     const birchPollen = airQuality?.hourly?.birch_pollen?.[0] ?? null;
     const alderPollen = airQuality?.hourly?.alder_pollen?.[0] ?? null;
     const hasPollenData = grassPollen !== null || birchPollen !== null || alderPollen !== null;
+    const pollenMetrics = [
+        grassPollen !== null
+            ? { key: "grass", label: "Grass", value: grassPollen.toFixed(0), iconClassName: "text-green-400" }
+            : null,
+        birchPollen !== null
+            ? { key: "birch", label: "Birch", value: birchPollen.toFixed(0), iconClassName: "text-lime-400" }
+            : null,
+        alderPollen !== null
+            ? { key: "alder", label: "Alder", value: alderPollen.toFixed(0), iconClassName: "text-emerald-400" }
+            : null,
+    ].filter((metric): metric is { key: string; label: string; value: string; iconClassName: string } => metric !== null);
 
     // Historical
     const histHigh = historical?.daily?.temperature_2m_max?.[0] != null
         ? Math.round(historical.daily.temperature_2m_max[0]) : null;
     const histLow = historical?.daily?.temperature_2m_min?.[0] != null
         ? Math.round(historical.daily.temperature_2m_min[0]) : null;
+    const historicalRangeItems: HistoricalRangeItem[] = [
+        {
+            key: "today",
+            label: "Today",
+            subLabel: "Current forecast",
+            low: dailyLow,
+            high: dailyHigh,
+            accentClass: "bg-[linear-gradient(90deg,rgba(56,189,248,0.95),rgba(251,146,60,0.92))]",
+        },
+        ...(histHigh !== null && histLow !== null
+            ? [{
+                key: "last-year",
+                label: "Last year",
+                subLabel: "Same date",
+                low: histLow,
+                high: histHigh,
+                accentClass: "bg-[linear-gradient(90deg,rgba(167,139,250,0.92),rgba(96,165,250,0.86))]",
+            }]
+            : []),
+        ...(climateNormal
+            ? [{
+                key: "average",
+                label: "3yr avg",
+                subLabel: "Climate normal",
+                low: climateNormal.avg_low,
+                high: climateNormal.avg_high,
+                accentClass: "bg-[linear-gradient(90deg,rgba(148,163,184,0.9),rgba(203,213,225,0.82))]",
+            }]
+            : []),
+    ];
+    const historicalChartMin = historicalRangeItems.length > 0
+        ? Math.min(...historicalRangeItems.map((item) => item.low))
+        : null;
+    const historicalChartMax = historicalRangeItems.length > 0
+        ? Math.max(...historicalRangeItems.map((item) => item.high))
+        : null;
+    const historicalChartRange = historicalChartMin != null && historicalChartMax != null
+        ? Math.max(historicalChartMax - historicalChartMin, 1)
+        : 1;
 
     const riverDischarge = flood?.daily?.river_discharge?.[0] ?? null;
     const riverDischargeMin = flood?.daily?.river_discharge_min?.[0] ?? null;
@@ -589,6 +895,12 @@ export default function WeatherCard({
     const displayTemp = currentTemp;
     const confidenceModelNames = forecastConfidence?.modelNames ?? [];
     const confidenceModelTemps = forecastConfidence?.modelTemps ?? [];
+    const confidenceModelEntries = confidenceModelNames.reduce<Array<{ name: string; temp: number }>>((entries, name, index) => {
+        const temp = confidenceModelTemps[index];
+        if (temp == null) return entries;
+        entries.push({ name, temp });
+        return entries;
+    }, []);
     const confidenceSummaryLabel = forecastConfidence?.label === "High"
         ? "Tight spread"
         : forecastConfidence?.label === "Moderate"
@@ -614,7 +926,47 @@ export default function WeatherCard({
     const stationIcaoId = metar?.icaoId ?? "----";
     const stationWind = metar ? `${waveDirectionToCardinal(metar.wind_dir)} ${metar.wind_speed} kt` : "No recent report";
     const stationVisibility = metar ? `${metar.visibility} mi` : "N/A";
+    const observedMetrics = [
+        { label: "Wind", value: stationWind, detail: "Field observation" },
+        { label: "Visibility", value: stationVisibility, detail: "Station report" },
+    ];
+    const stationSummaryTitle = !showStationTempDelta
+        ? "Station and forecast are closely aligned."
+        : metarTempDiff != null && metarTempDiff > 0
+            ? "The station is running warmer than the forecast."
+            : "The station is running cooler than the forecast.";
+    const observedTempChartPoints: ObservedTempChartPoint[] = (metar?.history ?? [])
+        .slice(-12)
+        .map((entry, index, recentEntries) => {
+            const reportTime = new Date(entry.reportTime);
+            if (Number.isNaN(reportTime.getTime())) return null;
 
+            const displayValue = distUnit === "mph"
+                ? Math.round(entry.temp * 9 / 5 + 32)
+                : Math.round(entry.temp);
+            const shouldShowLabel = index === 0 || index === recentEntries.length - 1 || index % 3 === 0;
+
+            return {
+                value: displayValue,
+                shortLabel: format(reportTime, "ha"),
+                axisLabel: shouldShowLabel ? format(reportTime, "ha") : "",
+                fullLabel: format(reportTime, "h:mm a"),
+                isLatest: index === recentEntries.length - 1,
+            };
+        })
+        .filter((entry): entry is ObservedTempChartPoint => entry !== null);
+    const observedTempMin = observedTempChartPoints.length > 0
+        ? Math.min(...observedTempChartPoints.map((point) => point.value))
+        : null;
+    const observedTempMax = observedTempChartPoints.length > 0
+        ? Math.max(...observedTempChartPoints.map((point) => point.value))
+        : null;
+    const observedTempChartDomain: [number, number] = observedTempMin != null && observedTempMax != null
+        ? [
+            Math.floor(observedTempMin - 1),
+            Math.ceil(observedTempMax + Math.max((observedTempMax - observedTempMin) * 0.12, 1)),
+        ]
+        : [0, 100];
     // Pirate Weather returns useful "no precipitation" summaries too.
     const minutelyTimeline = rainSummary?.timeline ?? [];
     const showMinutelyBanner = Boolean(rainSummary?.summary || minutelyTimeline.length > 0);
@@ -638,10 +990,183 @@ export default function WeatherCard({
     const peakMinutelyChance = Math.round(Math.max(...minutelyTimeline.map((point) => point.precip_probability), 0) * 100);
 
     const currentPrecipChanceLabel = formatCurrentPrecipChance(current.precipitation_probability);
+    const feelsLikeDetail = feelsLike === currentTemp
+        ? "Matches the air temp"
+        : `${feelsLike > currentTemp ? "+" : ""}${feelsLike - currentTemp}° vs actual`;
+    const conditionsHeroSummary = currentPrecipChanceLabel === "Low"
+        ? `${currentCondition} right now with no immediate rain signal.`
+        : `${currentCondition} right now with ${currentPrecipChanceLabel} precip potential in the mix.`;
+    const dayRange = Math.max(dailyHigh - dailyLow, 1);
+    const primaryConditionSignals = [
+        {
+            key: "feels-like",
+            icon: <Thermometer className="text-orange-400" size={22} />,
+            label: "Feels Like",
+            aggregated: true,
+            value: `${feelsLike}°`,
+            detail: feelsLikeDetail,
+            progress: clampPercentage(((feelsLike - dailyLow) / dayRange) * 100),
+            stroke: "#fb923c",
+            glow: "rgba(249, 115, 22, 0.36)",
+            badgeClassName: "bg-orange-500/10",
+            accentStyle: { background: "radial-gradient(circle at top left, rgba(249, 115, 22, 0.16), transparent 62%)" },
+        },
+        {
+            key: "wind",
+            icon: <Wind className="text-blue-300" size={22} />,
+            label: "Wind",
+            aggregated: true,
+            value: formatWindSpeed(current.wind_speed_10m, weatherData.current_units.wind_speed_10m),
+            detail: getWindLabel(current.wind_speed_10m),
+            progress: clampPercentage((current.wind_speed_10m / 30) * 100),
+            stroke: "#60a5fa",
+            glow: "rgba(96, 165, 250, 0.34)",
+            badgeClassName: "bg-blue-500/10",
+            accentStyle: { background: "radial-gradient(circle at top left, rgba(96, 165, 250, 0.16), transparent 62%)" },
+        },
+        {
+            key: "precip",
+            icon: <Droplets className="text-blue-400" size={22} />,
+            label: "Precip",
+            aggregated: true,
+            value: currentPrecipChanceLabel,
+            detail: currentPrecipChanceLabel === "Low" ? "No rain signal" : "Showers possible",
+            progress: clampPercentage(current.precipitation_probability),
+            stroke: "#3b82f6",
+            glow: "rgba(59, 130, 246, 0.34)",
+            badgeClassName: "bg-blue-500/10",
+            accentStyle: { background: "radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 62%)" },
+        },
+    ];
+    const visibilityInMiles = weatherData.current_units.visibility === "m"
+        ? current.visibility / 1609.34
+        : current.visibility / 5280;
+    const currentUvIndex = current.is_day === 1 ? (current.uv_index ?? 0) : 0;
+    const secondaryConditionSignals = [
+        {
+            key: "humidity",
+            icon: <Droplets className="text-cyan-400" size={22} />,
+            label: "Humidity",
+            aggregated: true,
+            value: formatStatPercent(current.relative_humidity_2m),
+            detail: getHumidityLabel(current.relative_humidity_2m),
+            badgeClassName: "bg-cyan-500/10",
+            progress: clampPercentage(current.relative_humidity_2m),
+            stroke: "#22d3ee",
+            glow: "rgba(34, 211, 238, 0.3)",
+            accentStyle: { background: "radial-gradient(circle at top left, rgba(34, 211, 238, 0.14), transparent 62%)" },
+        },
+        {
+            key: "uv",
+            icon: <SunDim className="text-yellow-400" size={22} />,
+            label: "UV",
+            aggregated: true,
+            value: currentUvIndex.toFixed(1),
+            detail: current.is_day === 1 ? getUvLabel(currentUvIndex) : "Nighttime",
+            badgeClassName: "bg-yellow-500/10",
+            progress: clampPercentage((currentUvIndex / 11) * 100),
+            stroke: "#facc15",
+            glow: "rgba(250, 204, 21, 0.28)",
+            accentStyle: { background: "radial-gradient(circle at top left, rgba(250, 204, 21, 0.14), transparent 62%)" },
+        },
+        {
+            key: "cloud-cover",
+            icon: <Cloud className="text-slate-300" size={22} />,
+            label: "Cloud Cover",
+            aggregated: true,
+            value: formatStatPercent(current.cloud_cover),
+            detail: getCloudCoverLabel(current.cloud_cover),
+            badgeClassName: "bg-slate-400/10",
+            progress: clampPercentage(current.cloud_cover),
+            stroke: "#94a3b8",
+            glow: "rgba(148, 163, 184, 0.24)",
+            accentStyle: { background: "radial-gradient(circle at top left, rgba(148, 163, 184, 0.12), transparent 62%)" },
+        },
+        {
+            key: "visibility",
+            icon: <Eye className="text-indigo-300" size={22} />,
+            label: "Visibility",
+            aggregated: true,
+            value: formatVisibility(current.visibility, distUnit, weatherData.current_units.visibility),
+            detail: getVisibilityLabel(current.visibility, weatherData.current_units.visibility),
+            badgeClassName: "bg-indigo-500/10",
+            progress: clampPercentage((visibilityInMiles / 10) * 100),
+            stroke: "#818cf8",
+            glow: "rgba(129, 140, 248, 0.28)",
+            accentStyle: { background: "radial-gradient(circle at top left, rgba(129, 140, 248, 0.14), transparent 62%)" },
+        },
+    ];
+    const allConditionSignals = [...primaryConditionSignals, ...secondaryConditionSignals];
+    const stationNeedsAttention = showStationTempDelta && metarTempDiff != null && Math.abs(metarTempDiff) >= 3;
+    const conditionsMetaPills = [
+        {
+            key: "local-time",
+            value: `Updated ${localTimeLabel}`,
+        },
+        ...(aqiLevel
+            ? [{
+                key: "air-quality",
+                value: `AQI ${aqiLevel.label}`,
+            }]
+            : []),
+        ...(metarTempDisplay != null
+            ? [{
+                key: "station-status",
+                value: stationNeedsAttention ? "Station off forecast" : "Station tracking well",
+            }]
+            : []),
+    ];
+    const conditionsShellStyle = isNightIcon
+        ? {
+            background: "radial-gradient(circle at top left, rgba(99, 102, 241, 0.18), transparent 34%), radial-gradient(circle at 88% 10%, rgba(56, 189, 248, 0.12), transparent 28%), linear-gradient(155deg, color-mix(in srgb, var(--surface-card-strong) 96%, transparent), color-mix(in srgb, #0f172a 44%, var(--surface-tile) 56%))",
+        }
+        : {
+            background: "radial-gradient(circle at top left, rgba(251, 146, 60, 0.16), transparent 30%), radial-gradient(circle at 82% 12%, rgba(56, 189, 248, 0.12), transparent 24%), linear-gradient(155deg, color-mix(in srgb, var(--surface-card-strong) 96%, transparent), color-mix(in srgb, #172554 36%, var(--surface-tile) 64%))",
+        };
+    const conditionsHeroPanelStyle = isNightIcon
+        ? {
+            background: "radial-gradient(circle at 18% 18%, rgba(129, 140, 248, 0.2), transparent 22%), radial-gradient(circle at 84% 18%, rgba(56, 189, 248, 0.12), transparent 24%), linear-gradient(145deg, rgba(15, 23, 42, 0.88), rgba(24, 24, 66, 0.8))",
+        }
+        : {
+            background: "radial-gradient(circle at 18% 18%, rgba(251, 146, 60, 0.18), transparent 24%), radial-gradient(circle at 84% 18%, rgba(56, 189, 248, 0.12), transparent 24%), linear-gradient(145deg, rgba(30, 41, 59, 0.84), rgba(24, 24, 66, 0.76))",
+        };
+    const hasConditionsExtras = Boolean((aqiValue !== null && aqiLevel) || hasPollenData || (metar && metarTempDisplay != null));
     const hasConfidencePill = Boolean(conf && forecastConfidence);
     const hasStationPill = metarTempDisplay != null;
     const hasMinutelyPill = Boolean(showMinutelyBanner && rainSummary);
-    const stationNeedsAttention = showStationTempDelta && metarTempDiff != null && Math.abs(metarTempDiff) >= 3;
+
+    const toggleConfidenceDetail = () => {
+        setShowConfidenceDetail((current) => {
+            const next = !current;
+            if (next) {
+                setShowStationDetail(false);
+                setShowMinutelyDetail(false);
+            }
+            return next;
+        });
+    };
+
+    const toggleStationDetail = () => {
+        setShowStationDetail((current) => {
+            const next = !current;
+            if (next) {
+                setShowConfidenceDetail(false);
+                setShowMinutelyDetail(false);
+            }
+            return next;
+        });
+    };
+
+    const toggleMinutelyDetail = () => {
+        setShowMinutelyDetail((current) => {
+            const next = !current;
+            if (next) {
+                setShowConfidenceDetail(false);
+                setShowStationDetail(false);
+            }
+            return next;
+        });
+    };
 
 
     const sourceEntries = [
@@ -836,10 +1361,13 @@ export default function WeatherCard({
         }
     ) => {
         const { animatedIndex, isFirstRow = false, isLastRow = false, showDivider = false } = options ?? {};
-        const dIconName = getWeatherIconFromCode(day.dayCode, 1);
+        const displayDayCode = !day.showRainChance && isLiquidPrecipitationCode(day.dayCode)
+            ? 3
+            : day.dayCode;
+        const dIconName = getWeatherIconFromCode(displayDayCode, 1);
         const dailyIconConfig = IconMap[dIconName] || IconMap.cloud;
         const DIcon = dailyIconConfig.icon;
-        const conditionLabel = getWeatherDescriptionFromCode(day.dayCode, 1);
+        const conditionLabel = getWeatherDescriptionFromCode(displayDayCode, 1);
         const offset = ((day.dayLow - tenDayMin) / tenDaySpread) * 100;
         const width = Math.max(((day.dayHigh - day.dayLow) / tenDaySpread) * 100, 10);
         const roundedPrecipProbability = Math.round(day.dayPrecipProbability);
@@ -915,194 +1443,351 @@ export default function WeatherCard({
                 </button>
                 <CollapsiblePanel open={openDetailSections.conditions} className="w-full">
                     <div className="flex flex-col gap-6 pt-2">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className={statTileClass}>
-                                <Thermometer className="text-orange-500" size={20} />
-                                <div className="flex flex-col">
-                                    <span className="theme-section-label text-xs font-bold">
-                                        <MetricLabel aggregated>Feels Like</MetricLabel>
-                                    </span>
-                                    <span className={statValueClass}>{feelsLike}&deg;</span>
+                        <section className="conditions-collection-shell">
+                            <div className="conditions-collection-shell-bg" style={conditionsShellStyle} />
+                            <div className="conditions-collection-header">
+                                <div className="min-w-0">
+                                    <div className="conditions-collection-kicker">Right Now</div>
+                                    <h3 className="conditions-collection-title">Forecast, comfort, and real-world readings.</h3>
+                                    <p className="conditions-collection-lead">{conditionsHeroSummary}</p>
+                                </div>
+                                <div className="conditions-meta-row">
+                                    {conditionsMetaPills.map((pill) => (
+                                        <span key={pill.key} className="conditions-meta-pill">
+                                            {pill.value}
+                                        </span>
+                                    ))}
                                 </div>
                             </div>
-                            <div className={statTileClass}>
-                                <Wind className="text-blue-400" size={20} />
-                                <div className="flex flex-col">
-                                    <span className="theme-section-label text-xs font-bold">
-                                        <MetricLabel aggregated>Wind</MetricLabel>
-                                    </span>
-                                    <span className={statValueClass}>
-                                        {formatWindSpeed(current.wind_speed_10m, weatherData.current_units.wind_speed_10m)}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className={statTileClass}>
-                                <Droplets className="text-blue-500" size={20} />
-                                <div className="flex flex-col">
-                                    <span className="theme-section-label text-xs font-bold">
-                                        <MetricLabel aggregated>Precip Chance</MetricLabel>
-                                    </span>
-                                    <span className={statValueClass}>{currentPrecipChanceLabel}</span>
-                                </div>
-                            </div>
-                            <div className={statTileClass}>
-                                <Droplets className="text-cyan-500" size={20} />
-                                <div className="flex flex-col">
-                                    <span className="theme-section-label text-xs font-bold">
-                                        <MetricLabel aggregated>Humidity</MetricLabel>
-                                    </span>
-                                    <span className={statValueClass}>{current.relative_humidity_2m}%</span>
-                                </div>
-                            </div>
-                            <div className={statTileClass}>
-                                <SunDim className="text-yellow-500" size={20} />
-                                <div className="flex flex-col">
-                                    <span className="theme-section-label text-xs font-bold">UV Index</span>
-                                    <span className={statValueClass}>{weatherData.daily.uv_index_max[0]}</span>
-                                </div>
-                            </div>
-                            <div className={statTileClass}>
-                                <Cloud className="text-[var(--text-muted)]" size={20} />
-                                <div className="flex flex-col">
-                                    <span className="theme-section-label text-xs font-bold">
-                                        <MetricLabel aggregated>Cloud Cover</MetricLabel>
-                                    </span>
-                                    <span className={statValueClass}>{current.cloud_cover}%</span>
-                                </div>
-                            </div>
-                            <div className={statTileClass}>
-                                <Eye className="text-indigo-400" size={20} />
-                                <div className="flex flex-col">
-                                    <span className="theme-section-label text-xs font-bold">
-                                        <MetricLabel aggregated>Visibility</MetricLabel>
-                                    </span>
-                                    <span className={statValueClass}>
-                                        {formatVisibility(current.visibility, distUnit, weatherData.current_units.visibility)}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
 
-                        {aqiValue !== null && aqiLevel && (
-                            <div className="flex flex-col gap-2">
-                                <span className={sectionLabelClass}>Air Quality</span>
-                                <div className="surface-tile rounded-2xl p-4 flex flex-col gap-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-2xl font-bold">{aqiValue}</span>
-                                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${aqiLevel.bg} ${aqiLevel.color}`}>
-                                                {aqiLevel.label}
-                                            </span>
+                            <div className="conditions-overview-grid">
+                                <div className="conditions-hero-panel" style={conditionsHeroPanelStyle}>
+                                    <div className="conditions-hero-main">
+                                        <div className={`conditions-hero-icon ${iconBadgeClass}`} style={iconBadgeStyle}>
+                                            <IconComponent
+                                                size={iconSize}
+                                                strokeWidth={iconConfig.strokeWidth ?? 1.9}
+                                                className={iconConfig.className}
+                                            />
                                         </div>
-                                        <span className="theme-muted text-xs font-medium">US AQI</span>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-3">
-                                        <div className="surface-tile-strong rounded-xl p-2">
-                                            <p className="theme-section-label text-[10px] font-bold">US AQI</p>
-                                            <p className="font-semibold text-sm">{aqiValue}</p>
-                                        </div>
-                                        <div className="surface-tile-strong rounded-xl p-2">
-                                            <p className="theme-section-label text-[10px] font-bold">EU AQI</p>
-                                            <p className="font-semibold text-sm">{airQuality?.current?.european_aqi?.toFixed(0) ?? "—"}</p>
-                                        </div>
-                                        <div className="surface-tile-strong rounded-xl p-2">
-                                            <p className="theme-section-label text-[10px] font-bold">PM2.5</p>
-                                            <p className="font-semibold text-sm">{airQuality?.current?.pm2_5?.toFixed(1) ?? "—"}</p>
-                                        </div>
-                                        <div className="surface-tile-strong rounded-xl p-2">
-                                            <p className="theme-section-label text-[10px] font-bold">PM10</p>
-                                            <p className="font-semibold text-sm">{airQuality?.current?.pm10?.toFixed(1) ?? "—"}</p>
-                                        </div>
-                                        <div className="surface-tile-strong rounded-xl p-2">
-                                            <p className="theme-section-label text-[10px] font-bold">Ozone</p>
-                                            <p className="font-semibold text-sm">{airQuality?.current?.ozone?.toFixed(0) ?? "—"}</p>
-                                        </div>
-                                        <div className="surface-tile-strong rounded-xl p-2">
-                                            <p className="theme-section-label text-[10px] font-bold">NO2</p>
-                                            <p className="font-semibold text-sm">{airQuality?.current?.nitrogen_dioxide?.toFixed(1) ?? "—"}</p>
-                                        </div>
-                                        <div className="surface-tile-strong rounded-xl p-2">
-                                            <p className="theme-section-label text-[10px] font-bold">CO</p>
-                                            <p className="font-semibold text-sm">{airQuality?.current?.carbon_monoxide?.toFixed(0) ?? "—"}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
 
-                        {hasPollenData && (
-                            <div className="flex flex-col gap-2">
-                                <span className={sectionLabelClass}>Pollen</span>
-                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                                    {grassPollen !== null && (
-                                        <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
-                                            <Leaf className="text-green-500" size={18} />
-                                            <span className="theme-section-label text-[10px] font-bold">Grass</span>
-                                            <span className="font-semibold text-sm">{grassPollen.toFixed(0)}</span>
-                                        </div>
-                                    )}
-                                    {birchPollen !== null && (
-                                        <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
-                                            <Leaf className="text-lime-600" size={18} />
-                                            <span className="theme-section-label text-[10px] font-bold">Birch</span>
-                                            <span className="font-semibold text-sm">{birchPollen.toFixed(0)}</span>
-                                        </div>
-                                    )}
-                                    {alderPollen !== null && (
-                                        <div className="surface-tile rounded-2xl p-3 flex flex-col items-center gap-1">
-                                            <Leaf className="text-emerald-600" size={18} />
-                                            <span className="theme-section-label text-[10px] font-bold">Alder</span>
-                                            <span className="font-semibold text-sm">{alderPollen.toFixed(0)}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {metar && metarTempDisplay != null && (
-                            <div className="flex flex-col gap-2">
-                                <span className={sectionLabelClass}>Actual Observed</span>
-                                <div className="surface-tile rounded-2xl p-4 flex flex-col gap-3">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <Radio className="text-indigo-500" size={18} />
-                                            <div>
-                                                <p className="theme-heading font-bold text-sm">{metar.name || metar.icaoId}</p>
-                                                <p className="theme-muted text-xs">Nearest weather station</p>
+                                        <div className="min-w-0">
+                                            <div className="conditions-hero-reading">
+                                                <p className="conditions-hero-temp">{currentTemp}&deg;</p>
+                                                <p className="conditions-hero-caption">Actual temperature</p>
+                                            </div>
+                                            <div className="conditions-status-row">
+                                                <span className="conditions-status-pill">{currentCondition}</span>
+                                                <span className="conditions-status-pill">High {dailyHigh}&deg;</span>
+                                                <span className="conditions-status-pill">Low {dailyLow}&deg;</span>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="text-2xl font-bold">{metarTempDisplay}&deg;</p>
-                                            {metarTempDiff != null && Math.abs(metarTempDiff) >= 1 && (
-                                                <div className="flex items-center gap-1 justify-end">
-                                                    {metarTempDiff > 0
-                                                        ? <TrendingUp size={12} className="text-orange-500" />
-                                                        : metarTempDiff < 0
-                                                            ? <TrendingDown size={12} className="text-blue-500" />
-                                                            : <Minus size={12} className="text-[var(--text-muted)]" />
-                                                    }
-                                                    <span className={`text-xs font-bold ${metarTempDiff > 0 ? "text-orange-500" : "text-blue-500"}`}>
-                                                        {metarTempDiff > 0 ? "+" : ""}{metarTempDiff}° vs forecast
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2 text-center">
-                                        <div className="surface-tile-strong rounded-xl p-2">
-                                            <p className="theme-section-label text-[10px] font-bold">Wind</p>
-                                            <p className="font-semibold text-sm">
-                                                {waveDirectionToCardinal(metar.wind_dir)} {metar.wind_speed} kt
-                                            </p>
-                                        </div>
-                                        <div className="surface-tile-strong rounded-xl p-2">
-                                            <p className="theme-section-label text-[10px] font-bold">Visibility</p>
-                                            <p className="font-semibold text-sm">{metar.visibility} mi</p>
-                                        </div>
+
+                                    <div className="conditions-ring-grid">
+                                        {allConditionSignals.map((stat, index) => (
+                                            <ConditionRingMetric
+                                                key={stat.key}
+                                                icon={stat.icon}
+                                                label={stat.label}
+                                                value={stat.value}
+                                                detail={stat.detail}
+                                                aggregated={stat.aggregated}
+                                                progress={stat.progress}
+                                                stroke={stat.stroke}
+                                                glow={stat.glow}
+                                                badgeClassName={stat.badgeClassName}
+                                                accentStyle={stat.accentStyle}
+                                                animationDelayMs={index * 40}
+                                            />
+                                        ))}
                                     </div>
                                 </div>
                             </div>
-                        )}
+
+                            {hasConditionsExtras ? (
+                                <div className="conditions-support-grid">
+                                    {aqiValue !== null && aqiLevel && (
+                                        <div
+                                            className="conditions-support-card"
+                                            style={{
+                                                background: aqiTone
+                                                    ? `radial-gradient(circle at top right, ${aqiTone.accentSoft}, transparent 38%), linear-gradient(180deg, color-mix(in srgb, var(--surface-tile) 97%, transparent), color-mix(in srgb, var(--surface-card-strong) 92%, transparent))`
+                                                    : undefined,
+                                            }}
+                                        >
+                                            <div className="flex flex-col gap-4">
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div className="min-w-0">
+                                                        <div className="inline-flex items-center gap-2">
+                                                            <Gauge size={15} style={{ color: aqiTone?.accent }} />
+                                                            <span className="theme-section-label text-[11px] font-bold">Air Quality</span>
+                                                        </div>
+                                                        <p className="theme-heading mt-2 text-xl font-semibold">AQI {aqiValue} · {aqiLevel.label}</p>
+                                                        <p className="theme-muted mt-2 text-sm leading-6">
+                                                            {resolvedAirQualitySummary || airQualitySummary}
+                                                        </p>
+                                                    </div>
+                                                    <span
+                                                        className="rounded-full px-3 py-1 text-xs font-bold"
+                                                        style={{
+                                                            background: aqiTone?.accentSoft,
+                                                            color: aqiTone?.accent ?? "var(--text-primary)",
+                                                        }}
+                                                    >
+                                                        Updated {localTimeLabel}
+                                                    </span>
+                                                </div>
+
+                                                <div className="conditions-support-meter">
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <span className="theme-muted text-xs font-semibold">AQI scale</span>
+                                                        <span className="theme-muted text-xs font-medium">{aqiValue} / 300+</span>
+                                                    </div>
+                                                    <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/8">
+                                                        <div
+                                                            className="h-full rounded-full"
+                                                            style={{
+                                                                width: `${aqiProgress}%`,
+                                                                background: aqiTone?.fill,
+                                                                boxShadow: aqiTone?.glow,
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <div className="theme-subtle mt-2 flex justify-between text-[10px] font-medium">
+                                                        {aqiScaleStops.map((stop) => (
+                                                            <span key={stop}>{stop}</span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <p className="theme-muted text-xs">
+                                                        Expand for the pollutant breakdown.
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowAirQualityDetail((currentOpen) => !currentOpen)}
+                                                        className="surface-chip inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-all hover-border-strong-var hover-bg-surface-elevated-var"
+                                                    >
+                                                        <span>{showAirQualityDetail ? "Hide details" : "Show details"}</span>
+                                                        <ChevronDown
+                                                            className={`h-4 w-4 transition-transform ${showAirQualityDetail ? "rotate-180" : ""}`}
+                                                        />
+                                                    </button>
+                                                </div>
+
+                                                <CollapsiblePanel open={showAirQualityDetail} className="w-full" innerClassName="pt-3">
+                                                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                                        {airQualityMetrics.map((metric) => (
+                                                            <div
+                                                                key={metric.label}
+                                                                className="surface-tile-strong rounded-[20px] p-3 text-left"
+                                                            >
+                                                                <p className="theme-section-label text-[10px] font-bold">{metric.label}</p>
+                                                                <p className="theme-heading mt-2 text-xl font-semibold leading-none">{metric.value}</p>
+                                                                <p className="theme-muted mt-2 text-[11px] leading-5">{metric.detail}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </CollapsiblePanel>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {hasPollenData && (
+                                        <div className="conditions-support-card">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div>
+                                                    <span className="theme-section-label text-[11px] font-bold">Pollen</span>
+                                                    <p className="theme-heading mt-2 text-lg font-semibold">Seasonal snapshot</p>
+                                                </div>
+                                                <Leaf className="text-emerald-300" size={18} />
+                                            </div>
+                                            <div className="mt-4 grid grid-cols-3 gap-3">
+                                                {pollenMetrics.map((metric) => (
+                                                    <div key={metric.key} className="conditions-pollen-chip">
+                                                        <Leaf className={metric.iconClassName} size={16} />
+                                                        <span className="theme-section-label text-[10px] font-bold">{metric.label}</span>
+                                                        <span className="theme-heading text-lg font-semibold">{metric.value}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {metar && metarTempDisplay != null && (
+                                        <div
+                                            className="conditions-support-card"
+                                            style={{
+                                                background: "radial-gradient(circle at top right, rgba(99, 102, 241, 0.12), transparent 38%), linear-gradient(180deg, color-mix(in srgb, var(--surface-tile) 97%, transparent), color-mix(in srgb, var(--surface-card-strong) 92%, transparent))",
+                                            }}
+                                        >
+                                            <div className="flex flex-col gap-4">
+                                                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-indigo-400/20 bg-indigo-500/10">
+                                                                <Radio className="text-indigo-300" size={18} />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <span className="theme-section-label text-[11px] font-bold">Observed Conditions</span>
+                                                                <p className="theme-heading truncate text-lg font-semibold">{stationName}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="mt-3 flex flex-wrap gap-2">
+                                                            <span className="surface-chip rounded-full px-3 py-1 text-xs font-semibold">{stationIcaoId}</span>
+                                                            {stationDistanceDisplay ? (
+                                                                <span className="surface-chip rounded-full px-3 py-1 text-xs font-semibold">
+                                                                    <span className="inline-flex items-center gap-1.5">
+                                                                        <MapPin size={12} />
+                                                                        {stationDistanceDisplay}
+                                                                    </span>
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
+                                                        <p className="theme-muted mt-3 text-sm leading-6">{stationSummaryTitle}</p>
+                                                    </div>
+
+                                                    <div className="conditions-station-reading">
+                                                        <p className="theme-section-label text-[10px] font-bold">Observed Temp</p>
+                                                        <p className="theme-heading mt-2 text-[44px] font-bold leading-[0.9] tracking-tight">
+                                                            {metarTempDisplay}&deg;
+                                                        </p>
+                                                        {showStationTempDelta && metarTempDiff != null ? (
+                                                            <div
+                                                                className="mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold"
+                                                                style={{
+                                                                    background: metarTempDiff > 0 ? "rgba(249, 115, 22, 0.12)" : "rgba(59, 130, 246, 0.12)",
+                                                                    borderColor: metarTempDiff > 0 ? "rgba(249, 115, 22, 0.22)" : "rgba(59, 130, 246, 0.22)",
+                                                                    color: metarTempDiff > 0 ? "#fb923c" : "#60a5fa",
+                                                                }}
+                                                            >
+                                                                {metarTempDiff > 0
+                                                                    ? <TrendingUp size={12} />
+                                                                    : metarTempDiff < 0
+                                                                        ? <TrendingDown size={12} />
+                                                                        : <Minus size={12} />
+                                                                }
+                                                                {metarTempDiff > 0 ? "+" : ""}{metarTempDiff}° vs forecast
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
+                                                </div>
+
+                                                {observedTempChartPoints.length >= 2 ? (
+                                                    <div
+                                                        className="overflow-hidden rounded-[18px] border border-white/6 px-3 py-2"
+                                                        style={{
+                                                            background: "linear-gradient(180deg, color-mix(in srgb, #818cf8 8%, transparent), color-mix(in srgb, #818cf8 2%, transparent))",
+                                                        }}
+                                                    >
+                                                        <div className="mb-1 flex items-center justify-between">
+                                                            <span className="theme-muted text-[10px] font-bold uppercase tracking-[0.16em]">
+                                                                Past 12 Hours
+                                                            </span>
+                                                            <span className="theme-subtle text-[10px] font-medium">
+                                                                Aviation Weather
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between px-1">
+                                                            <span className="text-[11px] font-bold text-indigo-200/90">Low {observedTempMin}&deg;</span>
+                                                            <span className="text-[11px] font-bold text-indigo-200/75">High {observedTempMax}&deg;</span>
+                                                        </div>
+                                                        <div className="mt-1 h-[92px] w-full">
+                                                            <ResponsiveContainer width="100%" height="100%">
+                                                                <AreaChart
+                                                                    data={observedTempChartPoints}
+                                                                    margin={{ top: 8, right: 10, left: 0, bottom: -2 }}
+                                                                >
+                                                                    <defs>
+                                                                        <linearGradient id="observed-temp-history" x1="0" y1="0" x2="0" y2="1">
+                                                                            <stop offset="0%" stopColor="#818cf8" stopOpacity={0.32} />
+                                                                            <stop offset="95%" stopColor="#818cf8" stopOpacity={0.02} />
+                                                                        </linearGradient>
+                                                                    </defs>
+                                                                    <CartesianGrid
+                                                                        vertical={false}
+                                                                        stroke="var(--border-soft)"
+                                                                        strokeDasharray="4 7"
+                                                                        opacity={0.22}
+                                                                    />
+                                                                    <XAxis
+                                                                        dataKey="shortLabel"
+                                                                        axisLine={false}
+                                                                        tickLine={false}
+                                                                        tickMargin={6}
+                                                                        minTickGap={20}
+                                                                        tickFormatter={(_value: string, index: number) => observedTempChartPoints[index]?.axisLabel ?? ""}
+                                                                        tick={{ fill: "var(--text-muted)", fontSize: 10, fontWeight: 700 }}
+                                                                    />
+                                                                    <YAxis
+                                                                        yAxisId={0}
+                                                                        hide={true}
+                                                                        domain={observedTempChartDomain}
+                                                                    />
+                                                                    <Tooltip
+                                                                        cursor={{ stroke: "var(--border-soft)", strokeWidth: 1, strokeDasharray: "4 6" }}
+                                                                        content={<ObservedTempTooltip />}
+                                                                    />
+                                                                    <Area
+                                                                        type="monotone"
+                                                                        dataKey="value"
+                                                                        yAxisId={0}
+                                                                        baseValue={observedTempChartDomain[0]}
+                                                                        stroke="#8b93ff"
+                                                                        strokeWidth={2.5}
+                                                                        fill="url(#observed-temp-history)"
+                                                                        fillOpacity={1}
+                                                                        dot={({ cx, cy, payload }) => {
+                                                                            if (!payload?.isLatest || cx == null || cy == null) return <></>;
+
+                                                                            return (
+                                                                                <circle
+                                                                                    cx={cx}
+                                                                                    cy={cy}
+                                                                                    r={4}
+                                                                                    fill="#8b93ff"
+                                                                                    stroke="var(--surface-card-strong)"
+                                                                                    strokeWidth={2}
+                                                                                />
+                                                                            );
+                                                                        }}
+                                                                        activeDot={{
+                                                                            r: 4,
+                                                                            strokeWidth: 2,
+                                                                            stroke: "var(--surface-card-strong)",
+                                                                            fill: "#8b93ff",
+                                                                        }}
+                                                                        isAnimationActive={true}
+                                                                        animationBegin={70}
+                                                                        animationDuration={420}
+                                                                        animationEasing="ease-out"
+                                                                    />
+                                                                </AreaChart>
+                                                            </ResponsiveContainer>
+                                                        </div>
+                                                    </div>
+                                                ) : null}
+
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {observedMetrics.map((metric) => (
+                                                        <div
+                                                            key={metric.label}
+                                                            className="surface-tile-strong rounded-[20px] p-3 text-left"
+                                                        >
+                                                            <p className="theme-section-label text-[10px] font-bold">{metric.label}</p>
+                                                            <p className="theme-heading mt-2 text-lg font-semibold leading-tight">{metric.value}</p>
+                                                            <p className="theme-muted mt-2 text-[11px] leading-5">{metric.detail}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : null}
+                        </section>
                     </div>
                 </CollapsiblePanel>
             </div>
@@ -1134,7 +1819,7 @@ export default function WeatherCard({
                                     </div>
                                     <div className="surface-chip shrink-0 rounded-[16px] px-3.5 py-2 text-right shadow-sm border border-[color:var(--border-soft)]">
                                         <p className="theme-section-label text-[10px] font-bold uppercase tracking-wider">
-                                            <MetricLabel aggregated={Boolean(forecastConfidence)}>Swing</MetricLabel>
+                                            <MetricLabel aggregated={Boolean(forecastConfidence)}>24h Range</MetricLabel>
                                         </p>
                                         <p className="theme-heading mt-0.5 text-sm font-bold">{next24Low}&deg; to {next24High}&deg;</p>
                                     </div>
@@ -1208,30 +1893,17 @@ export default function WeatherCard({
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center justify-between">
                                 <span className={sectionLabelClass}>
-                                    <MetricLabel aggregated={Boolean(forecastConfidence)}>
-                                        {showFullTenDayOutlook || !hasExtendedTenDayOutlook ? "10-Day Outlook" : "5-Day Outlook"}
-                                    </MetricLabel>
+                                    <MetricLabel aggregated={Boolean(forecastConfidence)}>10-Day Outlook</MetricLabel>
                                 </span>
-                                {hasExtendedTenDayOutlook ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowFullTenDayOutlook((current) => !current)}
-                                        className="surface-chip-muted inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] transition-all hover-border-strong-var hover-bg-surface-elevated-var"
-                                    >
-                                        <span>{showFullTenDayOutlook ? "Show 5 Days" : "Show 10 Days"}</span>
-                                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showFullTenDayOutlook ? "rotate-180" : ""}`} />
-                                    </button>
-                                ) : (
-                                    <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
-                                        Range View
-                                    </span>
-                                )}
+                                <span className="surface-chip-muted rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em]">
+                                    Range View
+                                </span>
                             </div>
                             <div className="surface-tile rounded-[28px] p-3 sm:p-4">
                                 <div className="flex flex-col">
                                     {primaryTenDayForecast.map((day, index) => renderTenDayForecastRow(day, {
                                         isFirstRow: index === 0,
-                                        isLastRow: !showFullTenDayOutlook && index === primaryTenDayForecast.length - 1,
+                                        isLastRow: !showFullTenDayOutlook && !hasExtendedTenDayOutlook && index === primaryTenDayForecast.length - 1,
                                         showDivider: index > 0,
                                     }))}
                                 </div>
@@ -1245,6 +1917,18 @@ export default function WeatherCard({
                                             }))}
                                         </div>
                                     </CollapsiblePanel>
+                                ) : null}
+                                {hasExtendedTenDayOutlook ? (
+                                    <div className="border-soft-var mt-2 border-t pt-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowFullTenDayOutlook((current) => !current)}
+                                            className="surface-chip-muted inline-flex w-full items-center justify-center gap-2 rounded-[18px] px-3 py-2.5 text-[11px] font-bold uppercase tracking-[0.18em] transition-all hover-border-strong-var hover-bg-surface-elevated-var"
+                                        >
+                                            <span>{showFullTenDayOutlook ? "Show Fewer Days" : "Show 5 More Days"}</span>
+                                            <ChevronDown className={`h-4 w-4 transition-transform ${showFullTenDayOutlook ? "rotate-180" : ""}`} />
+                                        </button>
+                                    </div>
                                 ) : null}
                             </div>
                         </div>
@@ -1331,6 +2015,52 @@ export default function WeatherCard({
                             <div className="flex flex-col gap-2">
                                 <span className={sectionLabelClass}>Historical Context</span>
                                 <div className="surface-tile rounded-2xl p-4 flex flex-col gap-3">
+                                    {historicalRangeItems.length > 1 && historicalChartMin != null && historicalChartMax != null && (
+                                        <div className="surface-tile-strong rounded-[22px] p-3 sm:p-4">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div>
+                                                    <p className="theme-heading text-sm font-semibold">Temp range compare</p>
+                                                    <p className="theme-muted text-xs">Daily low-to-high span for this date.</p>
+                                                </div>
+                                                <span className="theme-subtle text-[11px] font-semibold">
+                                                    {historicalChartMin}&deg; to {historicalChartMax}&deg;
+                                                </span>
+                                            </div>
+                                            <div className="mt-4 flex flex-col gap-3">
+                                                {historicalRangeItems.map((item) => {
+                                                    const offset = ((item.low - historicalChartMin) / historicalChartRange) * 100;
+                                                    const width = ((item.high - item.low) / historicalChartRange) * 100;
+
+                                                    return (
+                                                        <div key={item.key} className="flex items-center gap-3">
+                                                            <div className="w-20 shrink-0">
+                                                                <p className="theme-heading text-sm font-semibold">{item.label}</p>
+                                                                <p className="theme-muted text-[11px]">{item.subLabel}</p>
+                                                            </div>
+                                                            <span className="theme-muted w-9 shrink-0 text-right text-xs font-semibold">
+                                                                {item.low}&deg;
+                                                            </span>
+                                                            <div
+                                                                className="relative h-3 flex-1 rounded-full"
+                                                                style={{ background: "color-mix(in srgb, var(--surface-elevated) 82%, transparent)" }}
+                                                            >
+                                                                <div
+                                                                    className={`absolute top-0 h-3 rounded-full shadow-[0_0_0_1px_rgba(255,255,255,0.14)_inset] ${item.accentClass}`}
+                                                                    style={{
+                                                                        left: `${offset}%`,
+                                                                        width: `${Math.min(width, 100 - offset)}%`,
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <span className="theme-heading w-9 shrink-0 text-xs font-bold">
+                                                                {item.high}&deg;
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="flex items-center justify-between">
                                         <span className="theme-section-label text-xs font-bold">Today</span>
                                         <span className="font-bold text-sm">H: {dailyHigh}&deg; / L: {dailyLow}&deg;</span>
@@ -1521,9 +2251,9 @@ export default function WeatherCard({
                                 </span>
                             </div>
 
-                            <div className="mt-6 flex flex-col items-center gap-4">
+                            <div className="mt-4 flex w-full flex-col items-center gap-3 sm:mt-5 sm:flex-row sm:items-center sm:justify-center sm:gap-5">
                                 <div className="weather-hero-icon-shell">
-                                    <div className={`weather-hero-icon-core flex h-24 w-24 items-center justify-center rounded-full ${iconBadgeClass}`} style={iconBadgeStyle}>
+                                    <div className={`weather-hero-icon-core flex h-20 w-20 items-center justify-center rounded-full sm:h-[5.5rem] sm:w-[5.5rem] ${iconBadgeClass}`} style={iconBadgeStyle}>
                                         <IconComponent
                                             size={iconSize}
                                             strokeWidth={iconConfig.strokeWidth ?? 1.75}
@@ -1531,7 +2261,7 @@ export default function WeatherCard({
                                         />
                                     </div>
                                 </div>
-                                <div className="flex flex-col items-center gap-2">
+                                <div className="flex flex-col items-center gap-1.5 sm:items-start sm:text-left">
                                     <span className="weather-hero-temperature theme-heading flex items-start justify-center gap-1 font-bold tracking-tight">
                                         <span>{displayTemp}</span>
                                         <span className="weather-hero-degree">&deg;</span>
@@ -1540,238 +2270,278 @@ export default function WeatherCard({
                                         <AggregatedMetricBadge title="Main temperature is blended from multiple forecast models." />
                                     ) : null}
                                     <span
-                                        className="weather-hero-location theme-heading max-w-[16rem] capitalize"
+                                        className="weather-hero-location theme-heading max-w-[16rem] capitalize sm:max-w-none"
                                         title={locationName || "Current Location"}
                                     >
                                         {primaryLocationName}
                                     </span>
                                     {secondaryLocationName ? (
-                                        <span className="weather-hero-subtitle theme-muted max-w-[18rem] text-center font-semibold leading-snug sm:max-w-none">
+                                        <span className="weather-hero-subtitle theme-muted max-w-[18rem] text-center font-semibold leading-snug sm:max-w-none sm:text-left">
                                             {secondaryLocationName}
                                         </span>
                                     ) : null}
-                                    <span className="theme-heading mt-2 text-sm font-bold tracking-wide">
+                                    <span className="theme-heading mt-1 text-sm font-bold tracking-wide">
                                         H: {dailyHigh}&deg; L: {dailyLow}&deg;
                                     </span>
-                                    {heroSummary ? (
-                                        <p className="weather-hero-summary theme-muted mt-3 max-w-[34ch] text-center text-sm font-medium leading-relaxed sm:text-[15px]">
-                                            {heroSummary}
-                                        </p>
-                                    ) : null}
                                 </div>
                             </div>
 
+                            {heroSummary ? (
+                                <p className="weather-hero-summary theme-muted mt-4 max-w-[34ch] text-center text-sm font-medium leading-relaxed sm:mt-3 sm:max-w-[42ch] sm:text-[15px]">
+                                    {heroSummary}
+                                </p>
+                            ) : null}
+
                             {(hasConfidencePill || hasStationPill || hasMinutelyPill) && (
-                                <div className="mt-6 flex w-full flex-col gap-2.5">
+                                <div className="mt-4 flex w-full flex-col gap-2">
                                     {(hasConfidencePill || hasStationPill) && (
-                                        <div className="grid w-full grid-cols-2 gap-2.5">
+                                        <div className="grid w-full grid-cols-2 items-start gap-2">
                                             {conf && forecastConfidence && (
-                                                <button
-                                                    onClick={() => setShowConfidenceDetail(v => !v)}
-                                                    className={`${insightPillClass} justify-between ${showConfidenceDetail ? insightPillOpenClass : ""}`}
-                                                >
-                                                    <div className="flex w-full flex-col text-left">
-                                                        <p className="theme-section-label text-[10px] font-bold tracking-[0.18em] uppercase">Models</p>
-                                                        <div className="mt-1.5 flex w-full items-center justify-between">
-                                                            <div className="flex items-center gap-2">
-                                                                <Sparkles className="text-amber-400" size={16} />
-                                                                <span className="theme-heading text-[15px] font-semibold">{confidenceSummaryLabel ?? "Forecast spread"}</span>
+                                                <div className={`${insightPillClass} ${showConfidenceDetail ? insightPillOpenClass : ""}`}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={toggleConfidenceDetail}
+                                                        className="w-full text-left"
+                                                    >
+                                                        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-stretch gap-3 text-left">
+                                                            <div className="min-w-0">
+                                                                <p className="theme-section-label text-[10px] font-bold tracking-[0.18em] uppercase">Models</p>
+                                                                <div className="mt-2 grid grid-cols-[18px_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1">
+                                                                    <Sparkles className="mt-0.5 text-amber-400" size={16} />
+                                                                    <span className="theme-heading block truncate text-[15px] font-semibold leading-[1.2]">
+                                                                        {confidenceSummaryLabel ?? "Forecast spread"}
+                                                                    </span>
+                                                                    <p className="theme-subtle col-start-2 text-[13px] leading-[1.25]">
+                                                                        {confidenceAggregatedTemp}&deg; &plusmn;{forecastConfidence.spread}&deg;
+                                                                    </p>
+                                                                </div>
                                                             </div>
-                                                            <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showConfidenceDetail ? "rotate-180" : ""}`} />
+                                                            <div className="flex items-center justify-center pt-5">
+                                                                <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showConfidenceDetail ? "rotate-180" : ""}`} />
+                                                            </div>
                                                         </div>
-                                                        <p className="theme-subtle mt-1 flex items-center gap-1 text-[13px]">
-                                                            {confidenceAggregatedTemp}&deg; &plusmn;{forecastConfidence.spread}&deg;
-                                                        </p>
-                                                    </div>
-                                                </button>
+                                                    </button>
+                                                    <CollapsiblePanel open={Boolean(conf && forecastConfidence && showConfidenceDetail)} className="mt-3 w-full">
+                                                        <div className="border-soft-var border-t pt-3">
+                                                            <div className="border-soft-var border-b pb-3">
+                                                                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+                                                                    <div className="min-w-0">
+                                                                        <div className="flex min-w-0 items-center gap-2">
+                                                                            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${confidenceDotClass}`} />
+                                                                            <span className="theme-heading min-w-0 text-sm font-semibold">
+                                                                                Consensus
+                                                                            </span>
+                                                                        </div>
+                                                                        <p className="theme-muted mt-1.5 text-xs leading-[1.35]">
+                                                                            Blended from {confidenceModelEntries.length} forecast models.
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <p className="theme-heading shrink-0 text-xl font-bold leading-none">{confidenceAggregatedTemp}&deg;</p>
+                                                                        <p className="theme-subtle mt-1 text-xs font-medium">
+                                                                            &plusmn;{forecastConfidence.spread}&deg; spread
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="mt-3">
+                                                                <div className="mb-2 flex items-center justify-between px-1">
+                                                                    <p className="theme-section-label text-[10px] font-bold tracking-[0.18em] uppercase">Model Forecasts</p>
+                                                                    <p className="theme-muted text-[10px] font-bold uppercase tracking-[0.14em]">Forecast</p>
+                                                                </div>
+                                                                <div className="flex flex-col divide-y divide-[color:var(--border-soft)]">
+                                                                    {confidenceModelEntries.map(({ name, temp }) => (
+                                                                        <div key={name} className="flex items-center justify-between gap-3 py-2.5">
+                                                                            <span className="theme-heading text-sm font-semibold">{name}</span>
+                                                                            <span className="surface-chip rounded-full px-2.5 py-1 text-xs font-bold">
+                                                                                {temp}&deg;
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </CollapsiblePanel>
+                                                </div>
                                             )}
                                             {metarTempDisplay != null && (
-                                                <button
-                                                    onClick={() => setShowStationDetail(v => !v)}
-                                                    className={`${insightPillClass} justify-between ${showStationDetail ? insightPillOpenClass : ""} ${stationNeedsAttention ? "border-orange-300/70 bg-[linear-gradient(135deg,rgba(251,146,60,0.16),rgba(255,255,255,0.08))]" : ""}`}
-                                                >
-                                                    <div className="flex w-full flex-col text-left">
-                                                        <p className="theme-section-label text-[10px] font-bold tracking-[0.18em] uppercase">Station</p>
-                                                        <div className="mt-1.5 flex w-full items-center justify-between">
-                                                            <div className="flex items-center gap-2">
-                                                                <Radio className="text-sky-400" size={16} />
-                                                                <span className="theme-heading text-[15px] font-semibold">{metarTempDisplay}&deg; observed</span>
+                                                <div className={`${insightPillClass} ${showStationDetail ? insightPillOpenClass : ""} ${stationNeedsAttention ? "border-orange-300/70 bg-[linear-gradient(135deg,rgba(251,146,60,0.16),rgba(255,255,255,0.08))]" : ""}`}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={toggleStationDetail}
+                                                        className="w-full text-left"
+                                                    >
+                                                        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-stretch gap-3 text-left">
+                                                            <div className="min-w-0">
+                                                                <p className="theme-section-label text-[10px] font-bold tracking-[0.18em] uppercase">Station</p>
+                                                                <div className="mt-2 grid grid-cols-[18px_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1">
+                                                                    <Radio className="mt-0.5 text-sky-400" size={16} />
+                                                                    <span className="theme-heading block truncate text-[15px] font-semibold leading-[1.2]">
+                                                                        {metarTempDisplay}&deg; observed
+                                                                    </span>
+                                                                    <p className="theme-subtle col-start-2 text-[13px] leading-[1.25]">
+                                                                        {showStationTempDelta && metarTempDiff != null
+                                                                            ? `${metarTempDiff > 0 ? "+" : ""}${metarTempDiff}° vs main temp`
+                                                                            : stationDistanceDisplay ?? stationIcaoId}
+                                                                    </p>
+                                                                </div>
                                                             </div>
-                                                            <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showStationDetail ? "rotate-180" : ""}`} />
+                                                            <div className="flex items-center justify-center pt-5">
+                                                                <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showStationDetail ? "rotate-180" : ""}`} />
+                                                            </div>
                                                         </div>
-                                                        <p className="theme-subtle mt-1 text-[13px]">
-                                                            {showStationTempDelta && metarTempDiff != null
-                                                                ? `${metarTempDiff > 0 ? "+" : ""}${metarTempDiff}° vs main temp`
-                                                                : stationDistanceDisplay ?? stationIcaoId}
-                                                        </p>
-                                                    </div>
-                                                </button>
+                                                    </button>
+                                                    <CollapsiblePanel open={Boolean(metar && metarTempDisplay != null && showStationDetail)} className="mt-3 w-full">
+                                                        <div className="border-soft-var border-t pt-3 text-left">
+                                                            <div className="mb-3 flex items-start justify-between gap-3">
+                                                                <div className="min-w-0">
+                                                                    <p className="theme-section-label text-xs font-bold tracking-wide">Nearest Station</p>
+                                                                    <p className="theme-heading truncate text-sm font-bold">{stationName}</p>
+                                                                    <p className="theme-muted text-xs">{stationIcaoId}{stationDistanceDisplay ? ` · ${stationDistanceDisplay}` : ""}</p>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="theme-heading text-sm font-bold">{metarTempDisplay}&deg;</p>
+                                                                    {showStationTempDelta && metarTempDiff != null && (
+                                                                        <p className={`text-xs font-bold ${metarTempDiff > 0 ? "text-orange-500" : "text-blue-500"}`}>
+                                                                            {metarTempDiff > 0 ? "+" : ""}{metarTempDiff}&deg; vs main temp
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <div className="bg-surface-tile-var rounded-xl px-3 py-2.5">
+                                                                    <p className="theme-section-label text-[10px] font-bold">Wind</p>
+                                                                    <p className="theme-heading text-sm font-semibold">
+                                                                        {stationWind}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="bg-surface-tile-var rounded-xl px-3 py-2.5">
+                                                                    <p className="theme-section-label text-[10px] font-bold">Visibility</p>
+                                                                    <p className="theme-heading text-sm font-semibold">{stationVisibility}</p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </CollapsiblePanel>
+                                                </div>
                                             )}
                                         </div>
                                     )}
                                     {showMinutelyBanner && rainSummary && (
-                                        <button
-                                            onClick={() => setShowMinutelyDetail(v => !v)}
-                                            className={`${insightPillClass} justify-between ${showMinutelyDetail ? insightPillOpenClass : ""} ${minutelyPillToneClass}`}
-                                        >
-                                            <div className="flex w-full flex-col text-left">
-                                                <p className="theme-section-label text-[10px] font-bold tracking-[0.18em] uppercase">Next-Hour Trend</p>
-                                                <div className="mt-1.5 flex w-full items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <CloudRain className={minutelyIconClass} size={16} />
-                                                        <span className="theme-heading text-[15px] font-semibold">{minutelyStatusLabel}</span>
+                                        <div className={`${insightPillClass} ${showMinutelyDetail ? insightPillOpenClass : ""} ${minutelyPillToneClass}`}>
+                                            <button
+                                                type="button"
+                                                onClick={toggleMinutelyDetail}
+                                                className="w-full text-left"
+                                            >
+                                                <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-stretch gap-3 text-left">
+                                                    <div className="min-w-0">
+                                                        <p className="theme-section-label text-[10px] font-bold tracking-[0.18em] uppercase">Next-Hour Trend</p>
+                                                        <div className="mt-2 grid grid-cols-[18px_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1">
+                                                            <CloudRain className={`${minutelyIconClass} mt-0.5`} size={16} />
+                                                            <span className="theme-heading block truncate text-[15px] font-semibold leading-[1.2]">
+                                                                {minutelyStatusLabel}
+                                                            </span>
+                                                            <p className="theme-subtle col-start-2 text-[13px] leading-[1.25]">
+                                                                {rainSummary.isRaining ? minutelySummaryText : "Next-hour rain trend in 5-minute steps"}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                    <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showMinutelyDetail ? "rotate-180" : ""}`} />
+                                                    <div className="flex items-center justify-center pt-5">
+                                                        <ChevronDown className={`theme-subtle h-4 w-4 shrink-0 transition-transform ${showMinutelyDetail ? "rotate-180" : ""}`} />
+                                                    </div>
                                                 </div>
-                                                <p className="theme-subtle mt-1 text-[13px]">
-                                                    {rainSummary.isRaining ? minutelySummaryText : "Next-hour rain trend in 5-minute steps"}
-                                                </p>
-                                            </div>
-                                        </button>
+                                            </button>
+                                            <CollapsiblePanel open={Boolean(showMinutelyBanner && rainSummary && showMinutelyDetail)} className="mt-3 w-full">
+                                                <div className={`w-full rounded-2xl border px-4 py-3 text-left ${minutelyBannerClass}`}>
+                                                    <div className="mb-3 flex items-start justify-between gap-3 border-b border-current/10 pb-2">
+                                                        <div className="min-w-0">
+                                                            <p className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-70">
+                                                                Short-range rain trend
+                                                            </p>
+                                                            <p className="text-sm font-bold">
+                                                                Precipitation over the next hour
+                                                            </p>
+                                                        </div>
+                                                        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${minutelyBadgeClass}`}>
+                                                            {minutelyStatusLabel}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-start gap-3">
+                                                        <CloudRain className={`${minutelyIconClass} mt-0.5 shrink-0`} size={18} />
+                                                        <p className="text-sm font-semibold leading-relaxed">
+                                                            {minutelySummaryText}
+                                                        </p>
+                                                    </div>
+                                                    {minutelyTimeline.length > 0 && (
+                                                        <div className="mt-4">
+                                                            <div className="mb-2 flex items-center justify-between">
+                                                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] opacity-70">
+                                                                    Timeline
+                                                                </p>
+                                                                <p className="text-xs font-medium opacity-80">
+                                                                    5-minute steps
+                                                                </p>
+                                                            </div>
+                                                            <div className="surface-tile-strong rounded-2xl px-3 py-4">
+                                                                <div className="flex h-24 items-end gap-1.5">
+                                                                    {minutelyTimeline.map((point) => {
+                                                                        const probabilityHeight = Math.max(8, Math.round(point.precip_probability * 100));
+                                                                        const intensityRatio = maxMinutelyIntensity > 0
+                                                                            ? point.precip_intensity / maxMinutelyIntensity
+                                                                            : 0;
+                                                                        const barHeight = point.precip_probability > 0 || point.precip_intensity > 0
+                                                                            ? Math.max(probabilityHeight, Math.round(intensityRatio * 100))
+                                                                            : 8;
+
+                                                                        return (
+                                                                            <div key={point.offset_minutes} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
+                                                                                <div className="flex h-full w-full items-end">
+                                                                                    <div
+                                                                                        className={`w-full rounded-full transition-all ${point.precip_probability >= 0.5 || point.precip_intensity > 0.05
+                                                                                            ? "bg-gradient-to-t from-sky-500 to-cyan-300"
+                                                                                            : point.precip_probability > 0 || point.precip_intensity > 0
+                                                                                                ? "bg-gradient-to-t from-sky-400/70 to-cyan-200/70"
+                                                                                                : "bg-[color:var(--border-soft)]"
+                                                                                            }`}
+                                                                                        style={{ height: `${barHeight}%` }}
+                                                                                        title={`${point.offset_minutes} min: ${Math.round(point.precip_probability * 100)}%`}
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                                <div className="mt-3 flex justify-between text-[10px] font-bold uppercase tracking-wide opacity-70">
+                                                                    <span>Now</span>
+                                                                    <span>15m</span>
+                                                                    <span>30m</span>
+                                                                    <span>45m</span>
+                                                                    <span>1h</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                                {shouldShowForecastChance(peakMinutelyChance) ? (
+                                                                    <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
+                                                                        Peak chance {peakMinutelyChance}%
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
+                                                                        Weak signal
+                                                                    </span>
+                                                                )}
+                                                                <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
+                                                                    {minutelyGuidanceText}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </CollapsiblePanel>
+                                        </div>
                                     )}
                                 </div>
                             )}
-
-                            <CollapsiblePanel open={Boolean(conf && forecastConfidence && showConfidenceDetail)} className="mt-2 w-full">
-                                <div className="surface-tile rounded-2xl border px-4 py-3">
-                                    <div className="border-soft-var mb-3 flex items-center justify-between border-b pb-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className={`h-2 w-2 rounded-full ${confidenceDotClass}`} />
-                                            <span className="theme-section-label text-xs font-bold tracking-wide">
-                                                <MetricLabel aggregated aggregatedTitle="Consensus from multiple forecast models.">Model Average</MetricLabel>
-                                            </span>
-                                        </div>
-                                        <span className="theme-heading text-sm font-bold">{confidenceAggregatedTemp}&deg;</span>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                                        {confidenceModelNames.map((name, i) => (
-                                            confidenceModelTemps[i] != null && (
-                                                <div key={name} className="flex items-center justify-between gap-2">
-                                                    <span className="theme-muted text-xs font-medium">{name}</span>
-                                                    <span className="theme-heading text-xs font-bold">{confidenceModelTemps[i]}&deg;</span>
-                                                </div>
-                                            )
-                                        ))}
-                                    </div>
-                                </div>
-                            </CollapsiblePanel>
-                            <CollapsiblePanel open={Boolean(metar && metarTempDisplay != null && showStationDetail)} className="mt-2 w-full">
-                                <div className="surface-tile rounded-2xl border px-4 py-3 text-left">
-                                    <div className="border-soft-var mb-3 flex items-start justify-between gap-3 border-b pb-2">
-                                        <div className="min-w-0">
-                                            <p className="theme-section-label text-xs font-bold tracking-wide">Nearest Station</p>
-                                            <p className="theme-heading truncate text-sm font-bold">{stationName}</p>
-                                            <p className="theme-muted text-xs">{stationIcaoId}{stationDistanceDisplay ? ` · ${stationDistanceDisplay}` : ""}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="theme-heading text-sm font-bold">{metarTempDisplay}&deg;</p>
-                                            {showStationTempDelta && metarTempDiff != null && (
-                                                <p className={`text-xs font-bold ${metarTempDiff > 0 ? "text-orange-500" : "text-blue-500"}`}>
-                                                    {metarTempDiff > 0 ? "+" : ""}{metarTempDiff}&deg; vs main temp
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="surface-tile-strong rounded-xl p-2">
-                                            <p className="theme-section-label text-[10px] font-bold">Wind</p>
-                                            <p className="theme-heading text-sm font-semibold">
-                                                {stationWind}
-                                            </p>
-                                        </div>
-                                        <div className="surface-tile-strong rounded-xl p-2">
-                                            <p className="theme-section-label text-[10px] font-bold">Visibility</p>
-                                            <p className="theme-heading text-sm font-semibold">{stationVisibility}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </CollapsiblePanel>
-                            <CollapsiblePanel open={Boolean(showMinutelyBanner && rainSummary && showMinutelyDetail)} className="mt-2 w-full">
-                                <div className={`w-full rounded-2xl border px-4 py-3 text-left ${minutelyBannerClass}`}>
-                                    <div className="mb-3 flex items-start justify-between gap-3 border-b border-current/10 pb-2">
-                                        <div className="min-w-0">
-                                            <p className="text-[11px] font-bold uppercase tracking-[0.2em] opacity-70">
-                                                Short-range rain trend
-                                            </p>
-                                            <p className="text-sm font-bold">
-                                                Precipitation over the next hour
-                                            </p>
-                                        </div>
-                                        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${minutelyBadgeClass}`}>
-                                            {minutelyStatusLabel}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <CloudRain className={`${minutelyIconClass} mt-0.5 shrink-0`} size={18} />
-                                        <p className="text-sm font-semibold leading-relaxed">
-                                            {minutelySummaryText}
-                                        </p>
-                                    </div>
-                                    {minutelyTimeline.length > 0 && (
-                                        <div className="mt-4">
-                                            <div className="mb-2 flex items-center justify-between">
-                                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] opacity-70">
-                                                    Timeline
-                                                </p>
-                                                <p className="text-xs font-medium opacity-80">
-                                                    5-minute steps
-                                                </p>
-                                            </div>
-                                            <div className="surface-tile-strong rounded-2xl px-3 py-4">
-                                                <div className="flex h-24 items-end gap-1.5">
-                                                    {minutelyTimeline.map((point) => {
-                                                        const probabilityHeight = Math.max(8, Math.round(point.precip_probability * 100));
-                                                        const intensityRatio = maxMinutelyIntensity > 0
-                                                            ? point.precip_intensity / maxMinutelyIntensity
-                                                            : 0;
-                                                        const barHeight = point.precip_probability > 0 || point.precip_intensity > 0
-                                                            ? Math.max(probabilityHeight, Math.round(intensityRatio * 100))
-                                                            : 8;
-
-                                                        return (
-                                                            <div key={point.offset_minutes} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
-                                                                <div className="flex h-full w-full items-end">
-                                                                    <div
-                                                                        className={`w-full rounded-full transition-all ${point.precip_probability >= 0.5 || point.precip_intensity > 0.05
-                                                                            ? "bg-gradient-to-t from-sky-500 to-cyan-300"
-                                                                            : point.precip_probability > 0 || point.precip_intensity > 0
-                                                                                ? "bg-gradient-to-t from-sky-400/70 to-cyan-200/70"
-                                                                                : "bg-[color:var(--border-soft)]"
-                                                                            }`}
-                                                                        style={{ height: `${barHeight}%` }}
-                                                                        title={`${point.offset_minutes} min: ${Math.round(point.precip_probability * 100)}%`}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                                <div className="mt-3 flex justify-between text-[10px] font-bold uppercase tracking-wide opacity-70">
-                                                    <span>Now</span>
-                                                    <span>15m</span>
-                                                    <span>30m</span>
-                                                    <span>45m</span>
-                                                    <span>1h</span>
-                                                </div>
-                                            </div>
-                                            <div className="mt-3 flex flex-wrap gap-2">
-                                                {shouldShowForecastChance(peakMinutelyChance) ? (
-                                                    <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
-                                                        Peak chance {peakMinutelyChance}%
-                                                    </span>
-                                                ) : (
-                                                    <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
-                                                        Weak signal
-                                                    </span>
-                                                )}
-                                                <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold">
-                                                    {minutelyGuidanceText}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </CollapsiblePanel>
                         </div>
                     </div>
 
@@ -1781,44 +2551,44 @@ export default function WeatherCard({
                         <div className="pointer-events-none absolute -right-6 top-1/3 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
                         <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
-                        <div className="relative px-5 py-5 sm:px-8 sm:py-8">
-                            <div className="flex flex-col gap-5 sm:gap-6">
-                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex min-w-0 flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:gap-4 sm:text-left">
-                                            <div className="border-accent-var bg-accent-soft-var text-accent-var shadow-soft-var flex h-12 w-12 shrink-0 items-center justify-center rounded-[22px] border sm:h-14 sm:w-14">
-                                                <PersonalityIcon size={20} />
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                                                    <p className="theme-section-label text-[11px] font-bold tracking-[0.22em]">Forecast Voice</p>
-                                                    <span className="border-accent-var bg-accent-soft-var text-accent-var rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
-                                                        Active
-                                                    </span>
-                                                    {selectedPersonality.isCustom ? (
-                                                        <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
-                                                            Custom
-                                                        </span>
-                                                    ) : null}
-                                                </div>
-                                                <h2 className="theme-heading mt-3 text-[clamp(1.85rem,7vw,2.6rem)] font-bold leading-none tracking-[-0.03em]">
-                                                    {selectedPersonality.label}
-                                                </h2>
-                                                <p className="theme-subtle mx-auto mt-2 max-w-[34ch] text-[14px] leading-relaxed opacity-90 sm:mx-0 sm:text-[15px]">
-                                                    {selectedPersonality.description}
-                                                </p>
-                                            </div>
+                        <div className="relative px-5 py-4 sm:px-8 sm:py-6">
+                            <div className="flex flex-col gap-4 sm:gap-5">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <div className="border-accent-var bg-accent-soft-var text-accent-var shadow-soft-var flex h-11 w-11 shrink-0 items-center justify-center rounded-[20px] border">
+                                            <PersonalityIcon size={18} />
                                         </div>
+                                        <p className="theme-section-label text-[11px] font-bold tracking-[0.22em]">Forecast Voice</p>
                                     </div>
+                                    <div className="flex flex-wrap items-center justify-end gap-2">
+                                        <span className="border-accent-var bg-accent-soft-var text-accent-var rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
+                                            Active
+                                        </span>
+                                        {selectedPersonality.isCustom ? (
+                                            <span className="surface-chip rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]">
+                                                Custom
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                </div>
 
-                                    <div className="flex justify-center sm:justify-end">
+                                <div className="surface-tile-strong shadow-soft-var relative overflow-hidden rounded-[26px] border border-soft-var px-4 py-4 sm:px-5 sm:py-4">
+                                    <div className="bg-accent-soft-var pointer-events-none absolute -left-10 -top-10 h-28 w-28 rounded-full blur-3xl opacity-75" />
+
+                                    <div className="relative flex items-center justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <h2 className="theme-heading truncate pb-1 text-[clamp(1.9rem,7vw,2.5rem)] font-bold leading-[1.05] tracking-[-0.03em]">
+                                                {selectedPersonality.label}
+                                            </h2>
+                                        </div>
+
                                         <button
                                             type="button"
                                             onClick={() => setIsVoiceMenuOpen((currentValue) => !currentValue)}
-                                            className="surface-chip shadow-soft-var inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-bold transition-all hover:-translate-y-0.5 hover-border-accent-var hover-text-accent-var"
+                                            className="surface-chip shadow-soft-var inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-bold transition-all hover:-translate-y-0.5 hover-border-accent-var hover-text-accent-var sm:text-sm"
                                             aria-expanded={isVoiceMenuOpen}
                                         >
-                                            Change voice
+                                            Change
                                             <ChevronDown className={`transition-transform ${isVoiceMenuOpen ? "rotate-180" : "-rotate-90"}`} size={14} />
                                         </button>
                                     </div>
@@ -1843,12 +2613,17 @@ export default function WeatherCard({
                                     </div>
                                 </CollapsiblePanel>
 
-                                <div className="theme-divider border-t pt-5 sm:pt-6">
-                                    <div className="surface-tile-strong shadow-soft-var flex flex-col items-center rounded-[26px] px-5 py-5 text-center transition-all hover:-translate-y-0.5 sm:items-start sm:px-7 sm:py-6 sm:text-left">
-                                        <p className="theme-subtle text-[11px] font-bold uppercase tracking-[0.22em]">Current Read</p>
-                                        <p className="theme-heading mt-3 max-w-[34ch] text-[1.08rem] font-medium leading-[1.75] tracking-[-0.015em] sm:text-[1.16rem] lg:max-w-[38ch]">
-                                            {resolvedAdvice}
-                                        </p>
+                                <div className="theme-divider border-t pt-4 sm:pt-5">
+                                    <div className="surface-tile-strong shadow-soft-var relative overflow-hidden rounded-[26px] border border-soft-var px-5 py-5 transition-all hover:-translate-y-0.5 sm:px-6 sm:py-5">
+                                        <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-cyan-400/8 blur-3xl" />
+
+                                        <div className="relative">
+                                            <p className="theme-subtle mb-3 text-[11px] font-bold uppercase tracking-[0.22em]">Current Read</p>
+
+                                            <p className="theme-heading max-w-none text-left text-[1.08rem] font-medium leading-[1.72] tracking-[-0.015em] sm:text-[1.15rem] lg:text-[1.2rem]">
+                                                {resolvedAdvice}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

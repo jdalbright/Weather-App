@@ -140,6 +140,29 @@ export async function GET(req: Request) {
           : null;
         const temp = toNumber(nearestStation.temp);
         if (temp != null) {
+          let history: MetarData["history"] = [];
+          try {
+            const historyRes = await fetch(
+              `https://aviationweather.gov/api/data/metar?ids=${encodeURIComponent(nearestStation.icaoId)}&format=json&hours=24`,
+              { headers: { "User-Agent": USER_AGENT } }
+            );
+
+            if (historyRes.ok) {
+              const historyData = await historyRes.json();
+              history = Array.isArray(historyData)
+                ? historyData
+                  .map((entry: { reportTime?: unknown; temp?: unknown }) => {
+                    const reportTime = typeof entry?.reportTime === "string" ? entry.reportTime : null;
+                    const historicalTemp = toNumber(entry?.temp);
+                    if (!reportTime || historicalTemp == null) return null;
+                    return { reportTime, temp: historicalTemp };
+                  })
+                  .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+                  .sort((a, b) => Date.parse(a.reportTime) - Date.parse(b.reportTime))
+                : [];
+            }
+          } catch { /* no history */ }
+
           metar = {
             icaoId: nearestStation.icaoId,
             name: nearestStation.name ?? nearestStation.icaoId,
@@ -150,6 +173,7 @@ export async function GET(req: Request) {
             lat: stationLat ?? undefined,
             lon: stationLon ?? undefined,
             distance_km: distanceKm ?? undefined,
+            history,
           };
         }
       }

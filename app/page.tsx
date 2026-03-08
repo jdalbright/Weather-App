@@ -50,6 +50,65 @@ type CompatibleMediaQueryList = MediaQueryList & {
 const APPEARANCE_STORAGE_KEY = "weather-appearance";
 const CUSTOM_PERSONALITIES_STORAGE_KEY = "weather-custom-personalities";
 const DISMISSED_ALERTS_STORAGE_KEY = "weather-dismissed-alerts";
+const WEATHER_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+function buildWeatherCacheKey(
+  lat: number,
+  lon: number,
+  tempUnit: string,
+  distUnit: string
+): string {
+  return `weather-cache-v1|lat:${lat.toFixed(4)}|lon:${lon.toFixed(4)}|temp:${tempUnit}|dist:${distUnit}`;
+}
+
+type WeatherCacheData = {
+  weather: NonNullable<Awaited<ReturnType<typeof getWeatherData>>>;
+  airQuality: AirQualityData | null;
+  marine: MarineData | null;
+  flood: FloodData | null;
+  historical: HistoricalData | null;
+  astronomy: AstronomyData | null;
+  weatherAlerts: WeatherAPIAlert[];
+  nwsAlerts: NWSAlert[];
+  forecastConfidence: ForecastConfidence | null;
+  climateNormal: ClimateNormal | null;
+  metar: MetarData | null;
+  metarConnected: boolean;
+  rainSummary: RainSummary | null;
+  pirateWeatherConnected: boolean;
+  nwsConnected: boolean;
+};
+
+type WeatherCacheEntry = {
+  key: string;
+  timestamp: number;
+  data: WeatherCacheData;
+};
+
+function saveWeatherCache(key: string, data: WeatherCacheData): void {
+  try {
+    const entry: WeatherCacheEntry = { key, timestamp: Date.now(), data };
+    localStorage.setItem(key, JSON.stringify(entry));
+  } catch {
+    // localStorage may be full or unavailable — silently ignore
+  }
+}
+
+function loadWeatherCache(key: string): WeatherCacheData | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const entry = JSON.parse(raw) as WeatherCacheEntry;
+    if (entry.key !== key) return null;
+    if (Date.now() - entry.timestamp > WEATHER_CACHE_TTL_MS) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return entry.data;
+  } catch {
+    return null;
+  }
+}
 
 type AdviceExtras = {
   aqi?: number;
@@ -59,6 +118,7 @@ type AdviceExtras = {
 type ChatAdviceResponse = {
   heroText?: string;
   next24Text?: string;
+  airQualityText?: string;
   adviceText?: string;
   text?: string;
 };
@@ -212,6 +272,7 @@ export default function Home() {
   const [alertRefreshTick, setAlertRefreshTick] = useState(0);
   const [aiHeroSummary, setAiHeroSummary] = useState("");
   const [aiNext24Summary, setAiNext24Summary] = useState("");
+  const [aiAirQualitySummary, setAiAirQualitySummary] = useState("");
   const [aiAdvice, setAiAdvice] = useState("");
   const [theme, setTheme] = useState("theme-sun");
   const [appearance, setAppearance] = useState<Appearance>("system");
@@ -388,7 +449,7 @@ export default function Home() {
             windSpeed: formatWindSpeed(weatherData.current.wind_speed_10m, weatherData.current_units.wind_speed_10m),
             rainChance: weatherData.current.precipitation_probability,
             feelsLike: Math.round(weatherData.current.apparent_temperature),
-            uvIndex: weatherData.daily.uv_index_max?.[0] || 0,
+            uvIndex: weatherData.current.is_day === 1 ? (weatherData.current.uv_index ?? 0) : 0,
             highTemp: Math.round(weatherData.daily.temperature_2m_max[0]),
             lowTemp: Math.round(weatherData.daily.temperature_2m_min[0]),
             aqi: extras?.aqi,
@@ -399,6 +460,7 @@ export default function Home() {
       const json = await res.json() as ChatAdviceResponse;
       const nextHeroSummary = typeof json.heroText === "string" ? json.heroText.trim() : "";
       const nextNext24Summary = typeof json.next24Text === "string" ? json.next24Text.trim() : "";
+      const nextAirQualitySummary = typeof json.airQualityText === "string" ? json.airQualityText.trim() : "";
       const nextAdvice = typeof json.adviceText === "string"
         ? json.adviceText.trim()
         : typeof json.text === "string"
@@ -408,21 +470,65 @@ export default function Home() {
       if (requestId === adviceRequestIdRef.current) {
         setAiHeroSummary(nextHeroSummary);
         setAiNext24Summary(nextNext24Summary);
+        setAiAirQualitySummary(nextAirQualitySummary);
         setAiAdvice(nextAdvice);
       }
     } catch {
       if (requestId === adviceRequestIdRef.current) {
         setAiHeroSummary("");
         setAiNext24Summary("");
+        setAiAirQualitySummary("");
         setAiAdvice("Failed to get advice.");
       }
     }
   }, [settings.tempUnit]);
 
-  const fetchWeatherForLocation = useCallback(async (lat: number, lon: number, countryCode?: string | null) => {
+  const fetchWeatherForLocation = useCallback(async (lat: number, lon: number, countryCode?: string | null, bypassCache = false) => {
     const requestId = ++locationRequestIdRef.current;
     setLoading(true);
     setLocationLoadError(null);
+    setAiHeroSummary("");
+    setAiNext24Summary("");
+    setAiAirQualitySummary("");
+    setAiAdvice("");
+
+    // Check cache before firing any network requests
+    if (!bypassCache) {
+      const cacheKey = buildWeatherCacheKey(lat, lon, settings.tempUnit, settings.distUnit);
+      const cached = loadWeatherCache(cacheKey);
+      if (cached && requestId === locationRequestIdRef.current) {
+        const nextWeatherAlerts = cached.weatherAlerts ?? [];
+        const nextNwsAlerts = cached.nwsAlerts ?? [];
+        const nextVisibleWeatherAlerts = filterVisibleAlerts("weatherapi", nextWeatherAlerts, dismissedAlertKeysRef.current);
+        const nextVisibleNwsAlerts = filterVisibleAlerts("nws", nextNwsAlerts, dismissedAlertKeysRef.current);
+
+        setWeather(cached.weather);
+        setAirQuality(cached.airQuality);
+        setMarine(cached.marine);
+        setFlood(cached.flood);
+        setHistorical(cached.historical);
+        setAstronomy(cached.astronomy);
+        setWeatherAlerts(nextWeatherAlerts);
+        setNwsAlerts(nextNwsAlerts);
+        setForecastConfidence(cached.forecastConfidence);
+        setClimateNormal(cached.climateNormal);
+        setMetar(cached.metar);
+        setMetarConnected(cached.metarConnected);
+        setRainSummary(cached.rainSummary);
+        setPirateWeatherConnected(cached.pirateWeatherConnected);
+        setNwsConnected(cached.nwsConnected);
+        setTheme(getThemeFromCode(cached.weather.current.weather_code, cached.weather.current.is_day));
+        setLoading(false);
+
+        void fetchAIAdvice(
+          cached.weather,
+          getPersonality(personalityRef.current, customPersonalitiesRef.current),
+          buildAdviceExtras(cached.airQuality, nextVisibleWeatherAlerts, nextVisibleNwsAlerts)
+        );
+        return;
+      }
+    }
+
     setWeather(null);
     setAirQuality(null);
     setMarine(null);
@@ -438,9 +544,6 @@ export default function Home() {
     setRainSummary(null);
     setPirateWeatherConnected(false);
     setNwsConnected(false);
-    setAiHeroSummary("");
-    setAiNext24Summary("");
-    setAiAdvice("");
 
     type ExtendedWeatherResponse = {
       astronomy: AstronomyData | null;
@@ -501,6 +604,27 @@ export default function Home() {
       setClimateNormal(normalData);
       setWeather(data);
       setTheme(getThemeFromCode(data.current.weather_code, data.current.is_day));
+
+      // Persist to cache so subsequent page loads skip network calls
+      const cacheKey = buildWeatherCacheKey(lat, lon, settings.tempUnit, settings.distUnit);
+      saveWeatherCache(cacheKey, {
+        weather: data,
+        airQuality: aqData,
+        marine: marineData,
+        flood: floodData,
+        historical: histData,
+        astronomy: extData.astronomy ?? null,
+        weatherAlerts: nextWeatherAlerts,
+        nwsAlerts: nextNwsAlerts,
+        forecastConfidence: confidenceData,
+        climateNormal: normalData,
+        metar: extData.metar ?? null,
+        metarConnected: extData.metarConnected ?? false,
+        rainSummary: extData.rainSummary ?? null,
+        pirateWeatherConnected: extData.pirateWeatherConnected ?? false,
+        nwsConnected: extData.nwsConnected ?? false,
+      });
+
       void fetchAIAdvice(
         data,
         getPersonality(personalityRef.current, customPersonalitiesRef.current),
@@ -793,7 +917,7 @@ export default function Home() {
 
   const handleManualRefresh = useCallback(() => {
     if (!coords || loading) return;
-    void fetchWeatherForLocation(coords.lat, coords.lon, coords.countryCode);
+    void fetchWeatherForLocation(coords.lat, coords.lon, coords.countryCode, true);
   }, [coords, fetchWeatherForLocation, loading]);
 
   const mainStyle = hasMounted
@@ -1097,7 +1221,7 @@ export default function Home() {
             <p className="theme-muted animate-pulse font-semibold">Checking the skies...</p>
             {isLocationDelayed ? (
               <p className="theme-subtle max-w-xs text-sm">
-                Location is taking longer than usual. Search for a city above while we keep trying.
+                Still finding your location. Search for a city above if you want to jump ahead.
               </p>
             ) : null}
           </div>
@@ -1115,6 +1239,7 @@ export default function Home() {
           onToggleDetail={() => setIsDetailed(!isDetailed)}
           aiHeroSummary={aiHeroSummary}
           aiNext24Summary={aiNext24Summary}
+          aiAirQualitySummary={aiAirQualitySummary}
           aiAdvice={aiAdvice}
           allPersonalities={allPersonalities}
           personalityId={personality}

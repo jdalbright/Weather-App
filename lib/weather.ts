@@ -19,6 +19,7 @@ export interface WeatherData {
     wind_speed_10m: string;
     cloud_cover: string;
     visibility: string;
+    uv_index: string;
   };
   current: {
     time: string;
@@ -33,6 +34,7 @@ export interface WeatherData {
     wind_speed_10m: number;
     cloud_cover: number;
     visibility: number;
+    uv_index: number;
   };
   hourly: {
     time: string[];
@@ -45,6 +47,7 @@ export interface WeatherData {
     wind_speed_10m: number[];
     cloud_cover: number[];
     visibility: number[];
+    uv_index: number[];
   };
   daily: {
     time: string[];
@@ -296,7 +299,7 @@ export async function getWeatherData(
     const windUnitParam = windUnit === "mph" ? "&wind_speed_unit=mph" : "";
     const [baseRes, modelRes] = await Promise.all([
       fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,precipitation_probability,weather_code,wind_speed_10m,cloud_cover,visibility&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,precipitation_probability,wind_speed_10m,is_day,cloud_cover,visibility&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max,rain_sum,showers_sum,snowfall_sum&timezone=auto&forecast_days=16${tempUnitParam}${windUnitParam}`
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,precipitation_probability,weather_code,wind_speed_10m,cloud_cover,visibility,uv_index&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,precipitation_probability,wind_speed_10m,is_day,cloud_cover,visibility,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max,rain_sum,showers_sum,snowfall_sum&timezone=auto&forecast_days=16${tempUnitParam}${windUnitParam}`
       ),
       fetch(
         `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,precipitation_probability,wind_speed_10m,cloud_cover,visibility&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=16&models=${modelParam}${tempUnitParam}${windUnitParam}`
@@ -482,6 +485,23 @@ export function getAQILevel(aqi: number): { label: string; color: string; bg: st
   if (aqi <= 200) return { label: "Unhealthy", color: "text-red-700", bg: "bg-red-100" };
   if (aqi <= 300) return { label: "Very Unhealthy", color: "text-purple-700", bg: "bg-purple-100" };
   return { label: "Hazardous", color: "text-rose-900", bg: "bg-rose-200" };
+}
+
+export function getAirQualitySummary(label: string): string {
+  switch (label) {
+    case "Good":
+      return "Air looks clean right now, with particulate readings staying comfortably low.";
+    case "Moderate":
+      return "Most people should feel fine, though sensitive groups may notice the air more.";
+    case "Sensitive":
+      return "Sensitive groups may want shorter outdoor exposure while the air stays elevated.";
+    case "Unhealthy":
+      return "The air is running rough enough that outdoor time is worth limiting where possible.";
+    case "Very Unhealthy":
+      return "Conditions are significantly degraded and are not a good fit for prolonged exposure.";
+    default:
+      return "Air quality is in a hazardous range and deserves immediate caution outdoors.";
+  }
 }
 
 // ─── Marine ───────────────────────────────────────────────────────────────────
@@ -912,6 +932,10 @@ export interface MetarData {
   lat?: number;
   lon?: number;
   distance_km?: number;
+  history?: Array<{
+    reportTime: string;
+    temp: number;
+  }>;
 }
 
 // ─── Pirate Weather rain summary ──────────────────────────────────────────────

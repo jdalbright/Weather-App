@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Quicksand } from "next/font/google"; // Using our organic fonts
+import { Quicksand, Sora } from "next/font/google"; // Using our organic fonts
 import "./globals.css";
 import PwaManager from "@/components/PwaManager";
 
 const quicksand = Quicksand({ subsets: ["latin"], variable: '--font-sans' });
+const sora = Sora({ subsets: ["latin"], variable: "--font-display" });
 const appearanceScript = `
 (() => {
   const root = document.documentElement;
@@ -57,7 +58,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${quicksand.variable} antialiased`}>
+      <body className={`${quicksand.variable} ${sora.variable} antialiased`}>
         <script dangerouslySetInnerHTML={{ __html: appearanceScript }} />
         <PwaManager />
         {children}
