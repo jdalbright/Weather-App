@@ -609,7 +609,6 @@ function ConditionRingMetric({
     const statStyle = {
         "--ring-circumference": circumference,
         "--ring-offset": circumference * (1 - normalizedProgress / 100),
-        "--ring-rotation": `${normalizedProgress * 3.6 - 90}deg`,
         "--ring-stroke": stroke,
         "--ring-glow": glow,
         "--metric-delay": `${animationDelayMs}ms`,
@@ -622,7 +621,6 @@ function ConditionRingMetric({
             className="conditions-ring-metric"
             style={statStyle}
         >
-            <div className="conditions-ring-metric-sheen" aria-hidden="true" />
             <div className="conditions-ring-metric-head">
                 <div className="conditions-ring-metric-title-group">
                     <span className="conditions-ring-metric-label theme-section-label text-[10px] font-bold">{label}</span>
@@ -641,16 +639,11 @@ function ConditionRingMetric({
                     <circle className="conditions-ring-track" cx="50" cy="50" r="44" />
                     <circle className="conditions-ring-progress" cx="50" cy="50" r="44" />
                 </svg>
-                <span className="conditions-ring-marker" aria-hidden="true" />
                 <div className="conditions-ring-value-wrap">
-                    <div className="conditions-ring-core">
-                        <p className="conditions-ring-value">{value}</p>
-                    </div>
+                    <p className="conditions-ring-value">{value}</p>
                 </div>
             </div>
-            <div className="conditions-ring-detail-wrap">
-                <p className="conditions-ring-detail">{detail}</p>
-            </div>
+            <p className="conditions-ring-detail">{detail}</p>
         </article>
     );
 }
@@ -1069,6 +1062,23 @@ export default function WeatherCard({
             glow: "rgba(250, 204, 21, 0.28)",
             accentStyle: { background: "radial-gradient(circle at top left, rgba(250, 204, 21, 0.14), transparent 62%)" },
         },
+        ...(aqiValue !== null && aqiLevel
+            ? [{
+                key: "air-quality",
+                icon: <Gauge size={22} style={{ color: aqiTone?.accent ?? "#4ade80" }} />,
+                label: "Air Quality",
+                aggregated: false,
+                value: aqiValue.toFixed(0),
+                detail: `AQI ${aqiLevel.label}`,
+                badgeClassName: "bg-emerald-500/10",
+                progress: aqiProgress,
+                stroke: aqiTone?.accent ?? "#4ade80",
+                glow: aqiTone?.accentStrong ?? "rgba(16, 185, 129, 0.24)",
+                accentStyle: {
+                    background: `radial-gradient(circle at top left, ${aqiTone?.accentSoft ?? "rgba(74, 222, 128, 0.14)"}, transparent 62%)`,
+                },
+            }]
+            : []),
         {
             key: "cloud-cover",
             icon: <Cloud className="text-slate-300" size={22} />,
