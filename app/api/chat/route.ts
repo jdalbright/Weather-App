@@ -1,7 +1,11 @@
 import { generateObject } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { DEFAULT_PERSONALITY, PERSONALITY_PROMPTS } from "@/lib/personalities";
-import { buildWeatherPrompt, type ChatWeatherPayload } from "@/lib/weather-advice";
+import {
+  buildAirQualityPrompt,
+  buildForecastWeatherPrompt,
+  type ChatWeatherPayload,
+} from "@/lib/weather-advice";
 import { z } from "zod";
 
 type ChatRequestBody = {
@@ -10,10 +14,14 @@ type ChatRequestBody = {
   weather?: ChatWeatherPayload;
 };
 
-const weatherAdviceSchema = z.object({
+const forecastAdviceSchema = z.object({
   heroText: z.string().min(1),
   next24Text: z.string().min(1),
   adviceText: z.string().min(1),
+});
+
+const airQualityAdviceSchema = z.object({
+  airQualityText: z.string().min(1),
 });
 
 function getSystemPrompt(body: ChatRequestBody): string {
@@ -37,6 +45,7 @@ export async function POST(req: Request) {
       return Response.json({
         heroText: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] Right now it is ${body.weather?.condition ?? "unclear"} and ${body.weather?.temp ?? "?"}°${body.weather?.unit ?? "F"}.`,
         next24Text: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] ${body.weather?.condition ?? "Unclear weather"} holds into the next stretch with highs near ${body.weather?.highTemp ?? "?"}° and lows near ${body.weather?.lowTemp ?? "?"}°.`,
+        airQualityText: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] Air quality is ${body.weather?.aqi ?? "?"} on the US AQI scale right now.`,
         adviceText: `[MOCK ${body.personality ?? DEFAULT_PERSONALITY}] It is ${body.weather?.temp ?? "?"}°${body.weather?.unit ?? "F"} with ${body.weather?.condition ?? "unclear conditions"}. Dress for it and adjust your plans if needed.`,
       });
     }
@@ -46,37 +55,62 @@ export async function POST(req: Request) {
       baseURL: "https://ai-gateway.vercel.sh/v1",
     });
 
-    const { object } = await generateObject({
-      model: gatewayProvider("gemini-3.1-flash-lite-preview"),
-      system: systemPrompt,
-      schema: weatherAdviceSchema,
-      prompt: [
-        buildWeatherPrompt(body.weather),
-        "Return three string fields: heroText, next24Text, adviceText.",
-        "Each field has a different job. Keep their wording and purpose distinct.",
-        "heroText: one to three short sentences for the hero section.",
-        "heroText must describe only the current conditions right now.",
-        "heroText may mention the current temperature, how it feels, the sky/precipitation, wind, and whether it is day or night.",
-        "heroText must not mention the rest of today, tonight, tomorrow, highs, lows, forecast changes, rain chances, alerts, or future timing.",
-        "Keep heroText compact, personality-driven, and observational rather than advisory. No markdown, labels, or quotes.",
-        "next24Text: one to three short sentences for the detailed Next 24 Hours section.",
-        "next24Text should read like a compact forecast blurb for the coming stretch, using forecast context such as highs/lows, precipitation timing, likely shifts, or day/night transitions when relevant.",
-        "Keep next24Text easy to scan, lightly flavored by the personality, and more informational than adviceText.",
-        "adviceText: two to four short sentences of practical personality-driven guidance for the dedicated advice card.",
-        "adviceText should be the most action-oriented field. Use the most decision-relevant conditions, risks, AQI, rain chance, and alerts when they matter, and give concrete actions.",
-        "If there is a meaningful safety risk or alert, surface it clearly in next24Text and adviceText. heroText must still stay current-only.",
-        "No markdown, labels, or quotes in any field.",
-        "Do not repeat the same sentence structure or key phrasing across the three fields.",
-      ].join(" "),
-    });
+    const forecastPrompt = [
+      buildForecastWeatherPrompt(body.weather),
+      "Return three string fields: heroText, next24Text, adviceText.",
+      "Each field has a different job. Keep their wording and purpose distinct.",
+      "heroText: one to three short sentences for the hero section.",
+      "heroText must describe only the current conditions right now.",
+      "heroText may mention the current temperature, how it feels, the sky/precipitation, wind, and whether it is day or night.",
+      "heroText must not mention the rest of today, tonight, tomorrow, highs, lows, forecast changes, rain chances, alerts, future timing, or air quality.",
+      "Keep heroText compact, personality-driven, and observational rather than advisory. No markdown, labels, or quotes.",
+      "next24Text: one to three short sentences for the detailed Next 24 Hours section.",
+      "next24Text should read like a compact forecast blurb for the coming stretch, using forecast context such as highs/lows, precipitation timing, likely shifts, or day/night transitions when relevant.",
+      "Keep next24Text easy to scan, lightly flavored by the personality, and more informational than adviceText.",
+      "next24Text must not mention air quality, AQI, pollution, smoke levels, or whether the air is fresh or dirty.",
+      "adviceText: two to four short sentences of practical personality-driven guidance for the dedicated Current Read card.",
+      "adviceText should be the most action-oriented field. Use the most decision-relevant weather conditions, rain chance, and non-air-quality alerts when they matter, and give concrete actions.",
+      "adviceText must not mention air quality, AQI, pollution, smoke levels, pollen, breathing comfort, or whether the air is fresh or stale.",
+      "If there is a meaningful non-air-quality safety risk or alert, surface it clearly in next24Text and adviceText. heroText must still stay current-only.",
+      "No markdown, labels, or quotes in any field.",
+      "Do not repeat the same sentence structure or key phrasing across the three fields.",
+    ].join(" ");
 
-    return Response.json(object);
+    const airQualityPrompt = [
+      buildAirQualityPrompt(body.weather),
+      "Return one string field: airQualityText.",
+      "airQualityText: one or two short sentences for the Air Quality card.",
+      "airQualityText should describe what the current AQI means in plain English, in the active personality voice.",
+      "airQualityText should stay focused on current air quality only, and may mention who should care if the reading is elevated.",
+      "If AQI data is missing or clearly minimal, keep airQualityText brief and non-dramatic.",
+      "No markdown, labels, or quotes.",
+    ].join(" ");
+
+    const [{ object: forecastObject }, { object: airQualityObject }] = await Promise.all([
+      generateObject({
+        model: gatewayProvider("gemini-3.1-flash-lite-preview"),
+        system: systemPrompt,
+        schema: forecastAdviceSchema,
+        prompt: forecastPrompt,
+      }),
+      generateObject({
+        model: gatewayProvider("gemini-3.1-flash-lite-preview"),
+        system: systemPrompt,
+        schema: airQualityAdviceSchema,
+        prompt: airQualityPrompt,
+      }),
+    ]);
+
+    return Response.json({
+      ...forecastObject,
+      ...airQualityObject,
+    });
   } catch (error) {
     console.error("AI Generation Error", error);
     const errorMessage = error instanceof Error ? error.message : "";
 
     return Response.json(
-      { heroText: "", next24Text: "", adviceText: `Sorry, I'm feeling under the weather. ${errorMessage}`.trim() },
+      { heroText: "", next24Text: "", airQualityText: "", adviceText: `Sorry, I'm feeling under the weather. ${errorMessage}`.trim() },
       { status: 500 }
     );
   }

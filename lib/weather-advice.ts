@@ -16,7 +16,7 @@ export type ChatWeatherPayload = {
   alerts?: string;
 };
 
-export function buildWeatherPrompt(weather?: ChatWeatherPayload): string {
+export function buildForecastWeatherPrompt(weather?: ChatWeatherPayload): string {
   return [
     "Weather data for one location.",
     `Current conditions: ${weather?.temp ?? "?"}°${weather?.unit ?? "F"}, ${weather?.condition ?? "Unknown conditions"}, feels like ${weather?.feelsLike ?? "?"}°, ${weather?.isDay ? "daytime" : "nighttime"}, wind ${weather?.windSpeed ?? "Unknown"}.`,
@@ -25,9 +25,19 @@ export function buildWeatherPrompt(weather?: ChatWeatherPayload): string {
       ? `Sunrise/sunset context: ${weather?.sunrise ?? "Unknown"}/${weather?.sunset ?? "Unknown"}.`
       : null,
     `Forecast context: today's high/low ${weather?.highTemp ?? "?"}°/${weather?.lowTemp ?? "?"}°, precipitation chance ${weather?.rainChance ?? 0}%, UV index ${weather?.uvIndex ?? 0}.`,
-    weather?.aqi != null ? `Air quality context: US AQI ${weather.aqi}.` : null,
     weather?.alerts ? `Alert context: ${weather.alerts}.` : null,
     "Use the context selectively based on each field's job.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function buildAirQualityPrompt(weather?: ChatWeatherPayload): string {
+  return [
+    "Air quality data for one location.",
+    weather?.aqi != null ? `Current US AQI: ${weather.aqi}.` : "Current US AQI: unavailable.",
+    `Current weather context: ${weather?.temp ?? "?"}°${weather?.unit ?? "F"}, ${weather?.condition ?? "Unknown conditions"}.`,
+    "Write only about current air quality impact and keep it separate from the general forecast.",
   ]
     .filter(Boolean)
     .join(" ");
