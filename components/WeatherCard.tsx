@@ -55,7 +55,6 @@ import {
     AlertTriangle,
     Waves,
     Leaf,
-    History,
     Radio,
     CloudRain,
     TrendingUp,
@@ -157,6 +156,8 @@ type HistoricalRangeItem = {
     low: number;
     high: number;
     accentClass: string;
+    comparisonText?: string;
+    comparisonToneClass?: string;
 };
 type ObservedTempChartPoint = {
     value: number;
@@ -184,6 +185,37 @@ function formatCurrentPrecipChance(probability: number): string {
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
+}
+
+function getHistoricalDeltaCopy(delta: number, variant: "last-year" | "average"): {
+    text: string;
+    toneClass: string;
+} {
+    const absoluteDelta = Math.abs(delta);
+
+    if (absoluteDelta < 1) {
+        return {
+            text: variant === "average" ? "Near avg high" : "Same high as last year",
+            toneClass: "theme-subtle",
+        };
+    }
+
+    if (variant === "average") {
+        return {
+            text: delta > 0 ? `+${delta}° above avg high` : `${absoluteDelta}° below avg high`,
+            toneClass: delta > 0 ? "text-orange-500" : "text-blue-500",
+        };
+    }
+
+    return {
+        text: delta > 0 ? `+${delta}° warmer high` : `${absoluteDelta}° cooler high`,
+        toneClass: delta > 0 ? "text-orange-500" : "text-blue-500",
+    };
+}
+
+function hasMeaningfulSpread(values: number[], minimumSpread = 0.05): boolean {
+    if (values.length < 2) return false;
+    return Math.max(...values) - Math.min(...values) >= minimumSpread;
 }
 
 function getAirQualityTone(aqi: number): {
@@ -831,6 +863,8 @@ export default function WeatherCard({
         ? Math.round(historical.daily.temperature_2m_max[0]) : null;
     const histLow = historical?.daily?.temperature_2m_min?.[0] != null
         ? Math.round(historical.daily.temperature_2m_min[0]) : null;
+    const lastYearDelta = histHigh !== null ? getHistoricalDeltaCopy(dailyHigh - histHigh, "last-year") : null;
+    const climateDelta = climateNormal ? getHistoricalDeltaCopy(dailyHigh - climateNormal.avg_high, "average") : null;
     const historicalRangeItems: HistoricalRangeItem[] = [
         {
             key: "today",
@@ -848,6 +882,8 @@ export default function WeatherCard({
                 low: histLow,
                 high: histHigh,
                 accentClass: "bg-[linear-gradient(90deg,rgba(167,139,250,0.92),rgba(96,165,250,0.86))]",
+                comparisonText: lastYearDelta?.text,
+                comparisonToneClass: lastYearDelta?.toneClass,
             }]
             : []),
         ...(climateNormal
@@ -858,6 +894,8 @@ export default function WeatherCard({
                 low: climateNormal.avg_low,
                 high: climateNormal.avg_high,
                 accentClass: "bg-[linear-gradient(90deg,rgba(148,163,184,0.9),rgba(203,213,225,0.82))]",
+                comparisonText: climateDelta?.text,
+                comparisonToneClass: climateDelta?.toneClass,
             }]
             : []),
     ];
@@ -875,6 +913,9 @@ export default function WeatherCard({
     const riverDischargeMin = flood?.daily?.river_discharge_min?.[0] ?? null;
     const riverDischargeMean = flood?.daily?.river_discharge_mean?.[0] ?? null;
     const riverDischargeMax = flood?.daily?.river_discharge_max?.[0] ?? null;
+    const riverBandValues = [riverDischargeMin, riverDischargeMean, riverDischargeMax]
+        .filter((value): value is number => value != null);
+    const hasRiverBandSpread = hasMeaningfulSpread(riverBandValues);
 
     // Forecast confidence styling
     const confidenceStyle = {
@@ -2027,14 +2068,17 @@ export default function WeatherCard({
                                 <div className="surface-tile rounded-2xl p-4 flex flex-col gap-3">
                                     {historicalRangeItems.length > 1 && historicalChartMin != null && historicalChartMax != null && (
                                         <div className="surface-tile-strong rounded-[22px] p-3 sm:p-4">
-                                            <div className="flex items-center justify-between gap-3">
+                                            <div className="flex items-start justify-between gap-3">
                                                 <div>
-                                                    <p className="theme-heading text-sm font-semibold">Temp range compare</p>
-                                                    <p className="theme-muted text-xs">Daily low-to-high span for this date.</p>
+                                                    <p className="theme-heading text-sm font-semibold">Temperature range</p>
+                                                    <p className="theme-muted text-xs">Compare today&apos;s forecast range with last year and the recent average for this date.</p>
                                                 </div>
-                                                <span className="theme-subtle text-[11px] font-semibold">
-                                                    {historicalChartMin}&deg; to {historicalChartMax}&deg;
-                                                </span>
+                                                <div className="shrink-0 text-right">
+                                                    <p className="theme-subtle text-[10px] font-bold uppercase tracking-[0.14em]">Same scale</p>
+                                                    <p className="theme-subtle text-[11px] font-semibold">
+                                                        {historicalChartMin}&deg; to {historicalChartMax}&deg;
+                                                    </p>
+                                                </div>
                                             </div>
                                             <div className="mt-4 flex flex-col gap-3">
                                                 {historicalRangeItems.map((item) => {
@@ -2042,104 +2086,89 @@ export default function WeatherCard({
                                                     const width = ((item.high - item.low) / historicalChartRange) * 100;
 
                                                     return (
-                                                        <div key={item.key} className="flex items-center gap-3">
-                                                            <div className="w-20 shrink-0">
-                                                                <p className="theme-heading text-sm font-semibold">{item.label}</p>
-                                                                <p className="theme-muted text-[11px]">{item.subLabel}</p>
+                                                        <div key={item.key} className="surface-tile rounded-[20px] px-3 py-3">
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div className="min-w-0">
+                                                                    <p className="theme-heading text-sm font-semibold">{item.label}</p>
+                                                                    <p className="theme-muted text-[11px]">{item.subLabel}</p>
+                                                                </div>
+                                                                <div className="shrink-0 text-right">
+                                                                    <p className="theme-heading text-sm font-semibold">
+                                                                        {item.low}&deg; to {item.high}&deg;
+                                                                    </p>
+                                                                    {item.comparisonText ? (
+                                                                        <p className={`text-[11px] font-bold ${item.comparisonToneClass ?? "theme-subtle"}`}>
+                                                                            {item.comparisonText}
+                                                                        </p>
+                                                                    ) : (
+                                                                        <p className="theme-subtle text-[11px] font-semibold">Reference line</p>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            <span className="theme-muted w-9 shrink-0 text-right text-xs font-semibold">
-                                                                {item.low}&deg;
-                                                            </span>
-                                                            <div
-                                                                className="relative h-3 flex-1 rounded-full"
-                                                                style={{ background: "color-mix(in srgb, var(--surface-elevated) 82%, transparent)" }}
-                                                            >
+                                                            <div className="mt-3 flex items-center gap-3">
+                                                                <span className="theme-muted w-9 shrink-0 text-right text-xs font-semibold">
+                                                                    {item.low}&deg;
+                                                                </span>
                                                                 <div
-                                                                    className={`absolute top-0 h-3 rounded-full shadow-[0_0_0_1px_rgba(255,255,255,0.14)_inset] ${item.accentClass}`}
-                                                                    style={{
-                                                                        left: `${offset}%`,
-                                                                        width: `${Math.min(width, 100 - offset)}%`,
-                                                                    }}
-                                                                />
+                                                                    className="relative h-3 flex-1 rounded-full"
+                                                                    style={{ background: "color-mix(in srgb, var(--surface-elevated) 82%, transparent)" }}
+                                                                >
+                                                                    <div
+                                                                        className={`absolute top-0 h-3 rounded-full shadow-[0_0_0_1px_rgba(255,255,255,0.14)_inset] ${item.accentClass}`}
+                                                                        style={{
+                                                                            left: `${offset}%`,
+                                                                            width: `${Math.min(width, 100 - offset)}%`,
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <span className="theme-heading w-9 shrink-0 text-xs font-bold">
+                                                                    {item.high}&deg;
+                                                                </span>
                                                             </div>
-                                                            <span className="theme-heading w-9 shrink-0 text-xs font-bold">
-                                                                {item.high}&deg;
-                                                            </span>
                                                         </div>
                                                     );
                                                 })}
                                             </div>
                                         </div>
                                     )}
-                                    <div className="flex items-center justify-between">
-                                        <span className="theme-section-label text-xs font-bold">Today</span>
-                                        <span className="font-bold text-sm">H: {dailyHigh}&deg; / L: {dailyLow}&deg;</span>
-                                    </div>
-                                    {histHigh !== null && histLow !== null && (
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <History className="text-violet-500" size={14} />
-                                                <span className="theme-section-label text-xs font-bold">Last year</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-semibold text-sm">H: {histHigh}&deg; / L: {histLow}&deg;</span>
-                                                {(() => {
-                                                    const diff = dailyHigh - histHigh;
-                                                    if (Math.abs(diff) < 1) return null;
-                                                    return (
-                                                        <span className={`text-xs font-bold ${diff > 0 ? "text-orange-500" : "text-blue-500"}`}>
-                                                            {diff > 0 ? "+" : ""}{diff}&deg;
-                                                        </span>
-                                                    );
-                                                })()}
-                                            </div>
-                                        </div>
-                                    )}
-                                    {climateNormal && (
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <span className="surface-chip-muted rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase">3yr avg</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-semibold text-sm">H: {climateNormal.avg_high}&deg; / L: {climateNormal.avg_low}&deg;</span>
-                                                {(() => {
-                                                    const diff = dailyHigh - climateNormal.avg_high;
-                                                    if (Math.abs(diff) < 1) return <span className="theme-subtle text-xs font-bold">Normal</span>;
-                                                    return (
-                                                        <span className={`text-xs font-bold ${diff > 0 ? "text-orange-500" : "text-blue-500"}`}>
-                                                            {diff > 0 ? "+" : ""}{diff}&deg; vs avg
-                                                        </span>
-                                                    );
-                                                })()}
-                                            </div>
-                                        </div>
-                                    )}
                                     {riverDischarge !== null && (
                                         <>
                                             <div className="theme-divider border-t" />
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Waves className="text-blue-700" size={14} />
-                                                    <span className="theme-section-label text-xs font-bold">River Discharge</span>
+                                            <div className="surface-tile-strong rounded-[22px] p-3 sm:p-4">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <Waves className="text-blue-700" size={14} />
+                                                            <span className="theme-section-label text-xs font-bold">River Discharge</span>
+                                                        </div>
+                                                        <p className="theme-muted mt-2 text-xs">
+                                                            {hasRiverBandSpread
+                                                                ? "Hydrology model spread for today."
+                                                                : "Hydrology guidance is essentially steady through the day."}
+                                                        </p>
+                                                    </div>
+                                                    <div className="shrink-0 text-right">
+                                                        <p className="theme-subtle text-[10px] font-bold uppercase tracking-[0.14em]">Estimated flow</p>
+                                                        <p className="theme-heading text-lg font-bold">{riverDischarge.toFixed(1)} m&sup3;/s</p>
+                                                    </div>
                                                 </div>
-                                                <span className="font-semibold text-sm">{riverDischarge.toFixed(1)} m³/s</span>
-                                            </div>
-                                            {(riverDischargeMin !== null || riverDischargeMean !== null || riverDischargeMax !== null) && (
-                                                <div className="grid grid-cols-3 gap-2 text-center">
-                                                    <div className="surface-tile-strong rounded-xl p-2">
+                                                {(riverDischargeMin !== null || riverDischargeMean !== null || riverDischargeMax !== null) && hasRiverBandSpread && (
+                                                    <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                                                        <div className="surface-tile rounded-xl p-2">
                                                         <p className="theme-section-label text-[10px] font-bold">Low</p>
                                                         <p className="font-semibold text-sm">{riverDischargeMin?.toFixed(1) ?? "—"}</p>
                                                     </div>
-                                                    <div className="surface-tile-strong rounded-xl p-2">
-                                                        <p className="theme-section-label text-[10px] font-bold">Mean</p>
+                                                        <div className="surface-tile rounded-xl p-2">
+                                                        <p className="theme-section-label text-[10px] font-bold">Typical</p>
                                                         <p className="font-semibold text-sm">{riverDischargeMean?.toFixed(1) ?? "—"}</p>
                                                     </div>
-                                                    <div className="surface-tile-strong rounded-xl p-2">
+                                                        <div className="surface-tile rounded-xl p-2">
                                                         <p className="theme-section-label text-[10px] font-bold">High</p>
                                                         <p className="font-semibold text-sm">{riverDischargeMax?.toFixed(1) ?? "—"}</p>
                                                     </div>
-                                                </div>
-                                            )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </>
                                     )}
                                 </div>
